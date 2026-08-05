@@ -3,7 +3,7 @@ Description=Pi Pal smart home controller
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/python3 /home/pi/pipal/pipal.py
+ExecStart=/home/pi/pipal/venv/bin/python /home/pi/pipal/pipal.py
 Restart=always
 RestartSec=5
 StandardOutput=journal

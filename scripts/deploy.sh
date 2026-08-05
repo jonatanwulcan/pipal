@@ -12,9 +12,21 @@ ssh "$HOST" "mkdir -p $REMOTE_DIR/systemd"
 
 scp pipal.py "$HOST:$REMOTE_DIR/pipal.py"
 scp "$SERVICE_FILE" "$HOST:$REMOTE_DIR/$SERVICE_FILE"
+scp requirements.txt "$HOST:$REMOTE_DIR/requirements.txt"
 
 ssh "$HOST" bash <<EOF
 set -euo pipefail
+
+if ! dpkg -s python3-venv &>/dev/null; then
+  sudo apt-get install -y python3-venv
+fi
+
+if [ ! -d $REMOTE_DIR/venv ]; then
+  python3 -m venv $REMOTE_DIR/venv
+fi
+
+$REMOTE_DIR/venv/bin/pip install -q -r $REMOTE_DIR/requirements.txt
+
 sudo cp $REMOTE_DIR/$SERVICE_FILE /etc/systemd/system/$SERVICE_NAME.service
 sudo systemctl daemon-reload
 
