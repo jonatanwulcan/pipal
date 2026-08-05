@@ -11,3 +11,10 @@ Run from the repo root:
 ```
 
 This copies `pipal.py` and the systemd service to `jonatan@dag.local`, then enables and starts the service (or restarts it if already installed).
+
+## Logs
+
+```bash
+./scripts/logs.sh        # last 100 lines
+./scripts/logs.sh 50     # last 50 lines
+```
