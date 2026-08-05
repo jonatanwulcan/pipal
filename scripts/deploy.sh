@@ -2,17 +2,21 @@
 set -euo pipefail
 
 HOST="jonatan@dag.local"
-REMOTE_DIR="/home/pi/pipal"
 SERVICE_NAME="pipal"
 SERVICE_FILE="systemd/pipal.service"
 
 echo "Deploying to $HOST..."
+
+REMOTE_HOME=$(ssh "$HOST" 'echo $HOME')
+REMOTE_DIR="$REMOTE_HOME/pipal"
 
 ssh "$HOST" "mkdir -p $REMOTE_DIR/systemd"
 
 scp pipal.py "$HOST:$REMOTE_DIR/pipal.py"
 scp "$SERVICE_FILE" "$HOST:$REMOTE_DIR/$SERVICE_FILE"
 scp requirements.txt "$HOST:$REMOTE_DIR/requirements.txt"
+
+ssh "$HOST" "sed -i 's|/home/pi/pipal|$REMOTE_DIR|g' $REMOTE_DIR/$SERVICE_FILE"
 
 ssh "$HOST" bash <<EOF
 set -euo pipefail
