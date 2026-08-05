@@ -101,6 +101,7 @@ def play_track(keyboard, track_uri, cancel):
         print(f"Error: {e}", flush=True)
     finally:
         stop_anim.set()
+        anim.join()
         set_leds(keyboard, 0)
 
 
