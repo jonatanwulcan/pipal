@@ -6,6 +6,7 @@ import time
 import evdev
 from evdev import InputDevice, categorize, ecodes
 import soco
+from soco.plugins.sharelink import ShareLinkPlugin
 
 SPEAKER_NAME = "Dags Room"
 VOLUME = 30
@@ -17,34 +18,12 @@ LETTER_KEYS = {
     for c in string.ascii_lowercase
 }
 
-# Map each letter to a Spotify track URI
+# Map each letter to a Spotify track URL
 TRACKS = {
-    'a': 'spotify:track:PLACEHOLDER',
-    'b': 'spotify:track:3ULkqRMNEabAFBPgh3vbm1',
-    'c': 'spotify:track:PLACEHOLDER',
-    'd': 'spotify:track:PLACEHOLDER',
-    'e': 'spotify:track:PLACEHOLDER',
-    'f': 'spotify:track:PLACEHOLDER',
-    'g': 'spotify:track:PLACEHOLDER',
-    'h': 'spotify:track:PLACEHOLDER',
-    'i': 'spotify:track:PLACEHOLDER',
-    'j': 'spotify:track:PLACEHOLDER',
-    'k': 'spotify:track:PLACEHOLDER',
-    'l': 'spotify:track:PLACEHOLDER',
-    'm': 'spotify:track:PLACEHOLDER',
-    'n': 'spotify:track:PLACEHOLDER',
-    'o': 'spotify:track:PLACEHOLDER',
-    'p': 'spotify:track:PLACEHOLDER',
-    'q': 'spotify:track:PLACEHOLDER',
-    'r': 'spotify:track:PLACEHOLDER',
-    's': 'spotify:track:PLACEHOLDER',
-    't': 'spotify:track:PLACEHOLDER',
-    'u': 'spotify:track:PLACEHOLDER',
-    'v': 'spotify:track:PLACEHOLDER',
-    'w': 'spotify:track:PLACEHOLDER',
-    'x': 'spotify:track:PLACEHOLDER',
-    'y': 'spotify:track:PLACEHOLDER',
-    'z': 'spotify:track:PLACEHOLDER',
+    'b': 'https://open.spotify.com/track/3ULkqRMNEabAFBPgh3vbm1',  # Baby Shark
+    'd': 'https://open.spotify.com/track/39H5u7s9WJ0vDF8nR7BL31',  # We Are The Dinos
+    'g': 'https://open.spotify.com/track/3K6RAO0MAx5n3Agffwa69L',  # Små grodorna
+    'k': 'https://open.spotify.com/track/7kq6PnA3PYvzfCZN6P7Aqg',  # Krokodilen i bilen
 }
 
 
@@ -63,7 +42,7 @@ def animate_leds(keyboard, stop_event):
         time.sleep(0.2)
 
 
-def play_track(keyboard, track_uri, cancel):
+def play_track(keyboard, track_url, cancel):
     stop_anim = threading.Event()
     anim = threading.Thread(target=animate_leds, args=(keyboard, stop_anim), daemon=True)
     anim.start()
@@ -85,9 +64,10 @@ def play_track(keyboard, track_uri, cancel):
         if cancel.is_set():
             return
 
-        track_id = track_uri.split(':')[-1]
-        sonos_uri = f'x-sonos-spotify:spotify%3Atrack%3A{track_id}?sid=9&flags=8224&sn=1'
-        coordinator.play_uri(sonos_uri)
+        share_link = ShareLinkPlugin(coordinator)
+        coordinator.clear_queue()
+        queue_position = share_link.add_share_link_to_queue(track_url)
+        coordinator.play_from_queue(queue_position - 1)
 
         stop_anim.set()
         anim.join()
@@ -152,8 +132,8 @@ def main():
                 continue
 
             letter = LETTER_KEYS[code]
-            track_uri = TRACKS.get(letter)
-            if not track_uri:
+            track_url = TRACKS.get(letter)
+            if not track_url:
                 continue
 
             cancel_event.set()
@@ -163,7 +143,7 @@ def main():
             cancel_event = threading.Event()
             current_thread = threading.Thread(
                 target=play_track,
-                args=(keyboard, track_uri, cancel_event),
+                args=(keyboard, track_url, cancel_event),
                 daemon=True,
             )
             current_thread.start()
