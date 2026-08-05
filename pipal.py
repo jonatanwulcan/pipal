@@ -168,6 +168,8 @@ def main():
 
     finally:
         cancel_event.set()
+        if current_thread and current_thread.is_alive():
+            current_thread.join()
         keyboard.ungrab()
         set_leds(keyboard, 0)
 
