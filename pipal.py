@@ -20,7 +20,7 @@ LETTER_KEYS = {
 # Map each letter to a Spotify track URI
 TRACKS = {
     'a': 'spotify:track:PLACEHOLDER',
-    'b': 'spotify:track:PLACEHOLDER',
+    'b': 'spotify:track:3ULkqRMNEabAFBPgh3vbm1',
     'c': 'spotify:track:PLACEHOLDER',
     'd': 'spotify:track:PLACEHOLDER',
     'e': 'spotify:track:PLACEHOLDER',
