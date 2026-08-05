@@ -59,22 +59,25 @@ def play_track(keyboard, track_url, cancel):
         if cancel.is_set():
             return
 
-        coordinator = speaker.group.coordinator
-        coordinator.volume = VOLUME
+        speaker.unjoin()
         if cancel.is_set():
             return
 
-        share_link = ShareLinkPlugin(coordinator)
-        coordinator.clear_queue()
+        speaker.volume = VOLUME
+        if cancel.is_set():
+            return
+
+        share_link = ShareLinkPlugin(speaker)
+        speaker.clear_queue()
         queue_position = share_link.add_share_link_to_queue(track_url)
-        coordinator.play_from_queue(queue_position - 1)
+        speaker.play_from_queue(queue_position - 1)
 
         stop_anim.set()
         anim.join()
         set_leds(keyboard, 1)
 
         while not cancel.is_set():
-            state = coordinator.get_current_transport_info()['current_transport_state']
+            state = speaker.get_current_transport_info()['current_transport_state']
             if state not in ('PLAYING', 'TRANSITIONING'):
                 break
             time.sleep(1)
