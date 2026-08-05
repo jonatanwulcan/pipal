@@ -85,7 +85,9 @@ def play_track(keyboard, track_uri, cancel):
         if cancel.is_set():
             return
 
-        coordinator.play_uri(track_uri)
+        track_id = track_uri.split(':')[-1]
+        sonos_uri = f'x-sonos-spotify:spotify%3Atrack%3A{track_id}?sid=9&flags=8224&sn=1'
+        coordinator.play_uri(sonos_uri)
 
         stop_anim.set()
         anim.join()
