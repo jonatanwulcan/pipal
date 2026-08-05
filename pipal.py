@@ -26,14 +26,16 @@ def main():
     print(f"Found keyboard: {keyboard.name}", flush=True)
     keyboard.grab()
 
+    pressed = 0
     try:
         for event in keyboard.read_loop():
             if event.type == ecodes.EV_KEY:
                 key = categorize(event)
                 if key.keystate == key.key_down:
-                    set_leds(keyboard, 1)
+                    pressed += 1
                 elif key.keystate == key.key_up:
-                    set_leds(keyboard, 0)
+                    pressed = max(0, pressed - 1)
+                set_leds(keyboard, 1 if pressed > 0 else 0)
     finally:
         keyboard.ungrab()
         set_leds(keyboard, 0)
