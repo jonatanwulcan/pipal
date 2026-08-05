@@ -75,7 +75,7 @@ def play_track(keyboard, track_url, cancel):
 
         while not cancel.is_set():
             state = coordinator.get_current_transport_info()['current_transport_state']
-            if state != 'PLAYING':
+            if state not in ('PLAYING', 'TRANSITIONING'):
                 break
             time.sleep(1)
 
