@@ -9,7 +9,7 @@ import soco
 from soco.plugins.sharelink import ShareLinkPlugin
 
 SPEAKER_NAME = "Dags Room"
-VOLUME = 30
+VOLUME = 20
 
 ALL_LEDS = [ecodes.LED_NUML, ecodes.LED_CAPSL, ecodes.LED_SCROLLL]
 
