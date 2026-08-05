@@ -13,17 +13,43 @@ VOLUME = 20
 
 ALL_LEDS = [ecodes.LED_NUML, ecodes.LED_CAPSL, ecodes.LED_SCROLLL]
 
-LETTER_KEYS = {
-    getattr(ecodes, f'KEY_{c.upper()}'): c
-    for c in string.ascii_lowercase
+KEY_MAP = {
+    **{getattr(ecodes, f'KEY_{c.upper()}'): c for c in string.ascii_lowercase},
+    ecodes.KEY_LEFTBRACE: 'å',
+    ecodes.KEY_APOSTROPHE: 'ä',
+    ecodes.KEY_SEMICOLON: 'ö',
 }
 
-# Map each letter to a Spotify track URL
 TRACKS = {
-    'b': 'https://open.spotify.com/track/3ULkqRMNEabAFBPgh3vbm1',  # Baby Shark
-    'd': 'https://open.spotify.com/track/39H5u7s9WJ0vDF8nR7BL31',  # We Are The Dinos
-    'g': 'https://open.spotify.com/track/3K6RAO0MAx5n3Agffwa69L',  # Små grodorna
-    'k': 'https://open.spotify.com/track/7kq6PnA3PYvzfCZN6P7Aqg',  # Krokodilen i bilen
+    'a': 'https://open.spotify.com/track/24j01Gn8plo5U4gyYMPQws',
+    'b': 'https://open.spotify.com/track/5ygDXis42ncn6kYG14lEVG',
+    'c': 'https://open.spotify.com/track/5VpQpzSPO3adPtqKMGVYAD',
+    'd': 'https://open.spotify.com/track/6FK3E5XGjp2ViJAG4i2OJ1',
+    'e': 'https://open.spotify.com/track/7wPX68TYMcRFVuQXaWSZc2',
+    'f': 'https://open.spotify.com/track/3v6FM4daF3FiOrLpvOTmO4',
+    'g': 'https://open.spotify.com/track/5ZsbCNJeIZzeNGyplWY4M5',
+    'h': 'https://open.spotify.com/track/1OK9kmDfGXendaE4QwzrAI',
+    'i': 'https://open.spotify.com/track/3RriZsQmU4Jvp3Qh2oIZae',
+    'j': 'https://open.spotify.com/track/2ndZlMYvcZu0GnZj2ZRAgj',
+    'k': 'https://open.spotify.com/track/0gpzayawLbdlg37XvC43tU',
+    'l': 'https://open.spotify.com/track/4wQhYF06be3fv1l3qUiODJ',
+    'm': 'https://open.spotify.com/track/7CjLGz2MEU9vFssaZEXx8I',
+    'n': 'https://open.spotify.com/track/00IsaSz12SMPxi6KzpAg3F',
+    'o': 'https://open.spotify.com/track/0vwW2535lVhXVS4aXEjbHt',
+    'p': 'https://open.spotify.com/track/46aGIv3vi8IZwseswGSdoB',
+    'q': 'https://open.spotify.com/track/2ELSVi4kwWOXgxiIC592tJ',
+    'r': 'https://open.spotify.com/track/0gDgvbu5BD67XyWa9yU7Y5',
+    's': 'https://open.spotify.com/track/6Y6jq2el8dK1g00JppZXye',
+    't': 'https://open.spotify.com/track/3STU5Q4eapZJ5VbKsjsEOY',
+    'u': 'https://open.spotify.com/track/72xYXlxyC33XhFmlwzrv61',
+    'v': 'https://open.spotify.com/track/1CFWilgSeS4xbiZFYbQbUx',
+    'w': 'https://open.spotify.com/track/63Tl9k1sH8tznn3bqoMuyF',
+    'x': 'https://open.spotify.com/track/3Tp6XRivI85TAfpgja9ILh',
+    'y': 'https://open.spotify.com/track/1n15KtnkIknQUohNa9E0kT',
+    'z': 'https://open.spotify.com/track/49wOjOkS4pBK3PQnPnNYjb',
+    'å': 'https://open.spotify.com/track/1bBgHQoZCJ5FzkxrkL1PQ9',
+    'ä': 'https://open.spotify.com/track/72ylSapVzIEe8QH4gssLwF',
+    'ö': 'https://open.spotify.com/track/29fNIVCogo4jpvKgTtIwyb',
 }
 
 
@@ -97,7 +123,7 @@ def drain_latest_key(keyboard, initial_code):
         if not r:
             break
         for event in keyboard.read():
-            if event.type == ecodes.EV_KEY and event.value == 1 and event.code in LETTER_KEYS:
+            if event.type == ecodes.EV_KEY and event.value == 1 and event.code in KEY_MAP:
                 latest = event.code
     return latest
 
@@ -131,10 +157,10 @@ def main():
                 continue
 
             code = drain_latest_key(keyboard, event.code)
-            if code not in LETTER_KEYS:
+            if code not in KEY_MAP:
                 continue
 
-            letter = LETTER_KEYS[code]
+            letter = KEY_MAP[code]
             track_url = TRACKS.get(letter)
             if not track_url:
                 continue
