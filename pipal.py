@@ -10,7 +10,7 @@ import evdev
 from evdev import InputDevice, ecodes
 import soco
 from soco.plugins.sharelink import ShareLinkPlugin
-from pyplejd import PlejdManager
+import plejd
 
 SPEAKER_NAME = "Dags Room"
 VOLUME = 20
@@ -133,33 +133,12 @@ def play_track(keyboard, track_url, cancel):
 
 
 async def _control_plejd(dim_level, cancel, creds):
-    manager = PlejdManager(creds["username"], creds["password"], creds["siteId"])
-    try:
-        await manager.init()
-        if cancel.is_set():
-            return
-
-        connected = await manager.ping(retry=False)
-        if not connected:
-            print("Plejd: could not connect to mesh", flush=True)
-            return
-        if cancel.is_set():
-            return
-
-        device = next(
-            (d for d in manager.devices if d.address == SKRIVBORD_ADDRESS and hasattr(d, 'turn_on')),
-            None,
-        )
-        if not device:
-            print(f"Plejd: device {SKRIVBORD_ADDRESS} not found", flush=True)
-            return
-
-        if dim_level is None:
-            await device.turn_off()
-        else:
-            await device.turn_on(dim=dim_level)
-    finally:
-        await manager.disconnect()
+    if cancel.is_set():
+        return
+    await plejd.control(
+        creds["username"], creds["password"], creds["siteId"],
+        SKRIVBORD_ADDRESS, dim_level,
+    )
 
 
 def set_light(dim_level, cancel, creds):

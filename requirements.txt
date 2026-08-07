@@ -1,3 +1,5 @@
 evdev
 soco
-pyplejd
+bleak
+aiohttp
+cryptography
