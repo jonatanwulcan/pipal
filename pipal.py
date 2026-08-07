@@ -1,15 +1,22 @@
+import asyncio
+import json
+import os
 import select
 import string
 import threading
 import time
 
 import evdev
-from evdev import InputDevice, categorize, ecodes
+from evdev import InputDevice, ecodes
 import soco
 from soco.plugins.sharelink import ShareLinkPlugin
+from pyplejd import PlejdManager
 
 SPEAKER_NAME = "Dags Room"
 VOLUME = 20
+
+SKRIVBORD_ADDRESS = 18
+CREDENTIALS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plejd_credentials.json")
 
 ALL_LEDS = [ecodes.LED_NUML, ecodes.LED_CAPSL, ecodes.LED_SCROLLL]
 
@@ -19,6 +26,15 @@ KEY_MAP = {
     ecodes.KEY_APOSTROPHE: 'ä',
     ecodes.KEY_SEMICOLON: 'ö',
 }
+
+_f_keys = [
+    ecodes.KEY_F1, ecodes.KEY_F2, ecodes.KEY_F3, ecodes.KEY_F4,
+    ecodes.KEY_F5, ecodes.KEY_F6, ecodes.KEY_F7, ecodes.KEY_F8,
+    ecodes.KEY_F9, ecodes.KEY_F10, ecodes.KEY_F11, ecodes.KEY_F12,
+]
+# F1 = dimmest (~21), F12 = full brightness (255); ESC = off (None)
+PLEJD_KEY_MAP = {key: int(255 * (i + 1) / 12) for i, key in enumerate(_f_keys)}
+PLEJD_KEY_MAP[ecodes.KEY_ESC] = None
 
 TRACKS = {
     'a': 'https://open.spotify.com/track/24j01Gn8plo5U4gyYMPQws',
@@ -116,6 +132,43 @@ def play_track(keyboard, track_url, cancel):
         set_leds(keyboard, 0)
 
 
+async def _control_plejd(dim_level, cancel, creds):
+    manager = PlejdManager(creds["username"], creds["password"], creds["siteId"])
+    try:
+        await manager.init()
+        if cancel.is_set():
+            return
+
+        connected = await manager.ping(retry=False)
+        if not connected:
+            print("Plejd: could not connect to mesh", flush=True)
+            return
+        if cancel.is_set():
+            return
+
+        device = next(
+            (d for d in manager.devices if d.address == SKRIVBORD_ADDRESS and hasattr(d, 'turn_on')),
+            None,
+        )
+        if not device:
+            print(f"Plejd: device {SKRIVBORD_ADDRESS} not found", flush=True)
+            return
+
+        if dim_level is None:
+            await device.turn_off()
+        else:
+            await device.turn_on(dim=dim_level)
+    finally:
+        await manager.disconnect()
+
+
+def set_light(dim_level, cancel, creds):
+    try:
+        asyncio.run(_control_plejd(dim_level, cancel, creds))
+    except Exception as e:
+        print(f"Plejd error: {e}", flush=True)
+
+
 def drain_latest_key(keyboard, initial_code):
     latest = initial_code
     while True:
@@ -148,39 +201,60 @@ def main():
     print(f"Found keyboard: {keyboard.name}", flush=True)
     keyboard.grab()
 
-    cancel_event = threading.Event()
-    current_thread = None
+    with open(CREDENTIALS_FILE) as f:
+        plejd_creds = json.load(f)
+
+    sonos_cancel = threading.Event()
+    sonos_thread = None
+    plejd_cancel = threading.Event()
+    plejd_thread = None
 
     try:
         for event in keyboard.read_loop():
             if event.type != ecodes.EV_KEY or event.value != 1:
                 continue
 
-            code = drain_latest_key(keyboard, event.code)
-            if code not in KEY_MAP:
-                continue
+            code = event.code
 
-            letter = KEY_MAP[code]
-            track_url = TRACKS.get(letter)
-            if not track_url:
-                continue
+            if code in PLEJD_KEY_MAP:
+                dim = PLEJD_KEY_MAP[code]
+                plejd_cancel.set()
+                if plejd_thread and plejd_thread.is_alive():
+                    plejd_thread.join()
+                plejd_cancel = threading.Event()
+                plejd_thread = threading.Thread(
+                    target=set_light,
+                    args=(dim, plejd_cancel, plejd_creds),
+                    daemon=True,
+                )
+                plejd_thread.start()
 
-            cancel_event.set()
-            if current_thread and current_thread.is_alive():
-                current_thread.join()
+            elif code in KEY_MAP:
+                code = drain_latest_key(keyboard, code)
+                letter = KEY_MAP[code]
+                track_url = TRACKS.get(letter)
+                if not track_url:
+                    continue
 
-            cancel_event = threading.Event()
-            current_thread = threading.Thread(
-                target=play_track,
-                args=(keyboard, track_url, cancel_event),
-                daemon=True,
-            )
-            current_thread.start()
+                sonos_cancel.set()
+                if sonos_thread and sonos_thread.is_alive():
+                    sonos_thread.join()
+
+                sonos_cancel = threading.Event()
+                sonos_thread = threading.Thread(
+                    target=play_track,
+                    args=(keyboard, track_url, sonos_cancel),
+                    daemon=True,
+                )
+                sonos_thread.start()
 
     finally:
-        cancel_event.set()
-        if current_thread and current_thread.is_alive():
-            current_thread.join()
+        sonos_cancel.set()
+        if sonos_thread and sonos_thread.is_alive():
+            sonos_thread.join()
+        plejd_cancel.set()
+        if plejd_thread and plejd_thread.is_alive():
+            plejd_thread.join()
         keyboard.ungrab()
         set_leds(keyboard, 0)
 
