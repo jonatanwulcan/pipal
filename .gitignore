@@ -1,0 +1,4 @@
+plejd_credentials.json
+venv/
+__pycache__/
+*.pyc
