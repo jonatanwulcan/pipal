@@ -15,7 +15,7 @@ import plejd
 SPEAKER_NAME = "Dags Room"
 VOLUME = 20
 
-SKRIVBORD_ADDRESS = 18
+PLEJD_ADDRESS = 18  # Skrivbord
 CREDENTIALS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plejd_credentials.json")
 
 ALL_LEDS = [ecodes.LED_NUML, ecodes.LED_CAPSL, ecodes.LED_SCROLLL]
@@ -132,21 +132,6 @@ def play_track(keyboard, track_url, cancel):
         set_leds(keyboard, 0)
 
 
-async def _control_plejd(dim_level, cancel, creds):
-    if cancel.is_set():
-        return
-    await plejd.control(
-        creds["username"], creds["password"], creds["siteId"],
-        SKRIVBORD_ADDRESS, dim_level,
-    )
-
-
-def set_light(dim_level, cancel, creds):
-    try:
-        asyncio.run(_control_plejd(dim_level, cancel, creds))
-    except Exception as e:
-        print(f"Plejd error: {e}", flush=True)
-
 
 def drain_latest_key(keyboard, initial_code):
     latest = initial_code
@@ -183,10 +168,14 @@ def main():
     with open(CREDENTIALS_FILE) as f:
         plejd_creds = json.load(f)
 
+    plejd_conn = plejd.PlejdConnection(plejd_creds["username"], plejd_creds["password"], plejd_creds["siteId"])
+    plejd_loop = asyncio.new_event_loop()
+    plejd_loop_thread = threading.Thread(target=plejd_loop.run_forever, daemon=True)
+    plejd_loop_thread.start()
+    asyncio.run_coroutine_threadsafe(plejd_conn.warmup(), plejd_loop)
+
     sonos_cancel = threading.Event()
     sonos_thread = None
-    plejd_cancel = threading.Event()
-    plejd_thread = None
 
     try:
         for event in keyboard.read_loop():
@@ -197,16 +186,7 @@ def main():
 
             if code in PLEJD_KEY_MAP:
                 dim = PLEJD_KEY_MAP[code]
-                plejd_cancel.set()
-                if plejd_thread and plejd_thread.is_alive():
-                    plejd_thread.join()
-                plejd_cancel = threading.Event()
-                plejd_thread = threading.Thread(
-                    target=set_light,
-                    args=(dim, plejd_cancel, plejd_creds),
-                    daemon=True,
-                )
-                plejd_thread.start()
+                asyncio.run_coroutine_threadsafe(plejd_conn.send(PLEJD_ADDRESS, dim), plejd_loop)
 
             elif code in KEY_MAP:
                 code = drain_latest_key(keyboard, code)
@@ -231,9 +211,8 @@ def main():
         sonos_cancel.set()
         if sonos_thread and sonos_thread.is_alive():
             sonos_thread.join()
-        plejd_cancel.set()
-        if plejd_thread and plejd_thread.is_alive():
-            plejd_thread.join()
+        asyncio.run_coroutine_threadsafe(plejd_conn.close(), plejd_loop).result(timeout=5)
+        plejd_loop.call_soon_threadsafe(plejd_loop.stop)
         keyboard.ungrab()
         set_leds(keyboard, 0)
 
