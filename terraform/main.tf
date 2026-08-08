@@ -44,6 +44,60 @@ data "google_firebase_web_app_config" "default" {
   web_app_id = google_firebase_web_app.default.app_id
 }
 
+resource "google_project_service" "firestore" {
+  service            = "firestore.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "firebaserules" {
+  service            = "firebaserules.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_firestore_database" "default" {
+  project     = var.project_id
+  name        = "(default)"
+  location_id = "eur3"
+  type        = "FIRESTORE_NATIVE"
+
+  depends_on = [google_project_service.firestore]
+}
+
+resource "google_firebaserules_ruleset" "firestore" {
+  provider = google-beta
+  project  = var.project_id
+
+  source {
+    files {
+      name    = "firestore.rules"
+      content = <<-EOT
+        rules_version = '2';
+        service cloud.firestore {
+          match /databases/{database}/documents {
+            match /configuration/{document} {
+              allow read;
+              allow write: if request.auth != null
+                && request.auth.token.email in [
+                  'jonatan.wulcan@gmail.com',
+                  'karin.wulcan@gmail.com'
+                ];
+            }
+          }
+        }
+      EOT
+    }
+  }
+
+  depends_on = [google_firestore_database.default]
+}
+
+resource "google_firebaserules_release" "firestore" {
+  provider     = google-beta
+  name         = "cloud.firestore"
+  ruleset_name = google_firebaserules_ruleset.firestore.name
+  project      = var.project_id
+}
+
 output "hosting_url" {
   value = google_firebase_hosting_site.default.default_url
 }
