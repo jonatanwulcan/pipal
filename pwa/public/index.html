@@ -123,10 +123,6 @@
       cursor: pointer;
       user-select: none;
     }
-    .config-row--editing {
-      background: rgba(255,255,255,0.08);
-      cursor: default;
-    }
     .config-key {
       font-size: 1rem;
       font-weight: 700;
@@ -138,41 +134,72 @@
       font-size: 0.8rem;
       opacity: 0.4;
     }
-    .config-edit-input {
-      flex: 1;
-      min-width: 0;
-      background: none;
-      border: none;
-      border-bottom: 1px solid rgba(255,255,255,0.3);
-      color: #fff;
-      font-size: 0.8rem;
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-      padding: 4px 0;
-      outline: none;
+
+    /* Edit modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      display: flex;
+      align-items: flex-end;
+      z-index: 100;
     }
-    .config-edit-input::placeholder { color: rgba(255,255,255,0.3); }
-    .config-edit-input--error { border-bottom-color: #e74c3c; }
-    .config-ok-btn {
+    .modal-card {
+      background: #16213e;
+      border-radius: 20px 20px 0 0;
+      padding: 24px;
+      padding-bottom: max(24px, env(safe-area-inset-bottom));
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .modal-title {
+      font-size: 1rem;
+      font-weight: 600;
+      opacity: 0.7;
+    }
+    .modal-textarea {
+      width: 100%;
+      min-height: 120px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 12px;
+      color: #fff;
+      font-size: 0.95rem;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      padding: 14px;
+      outline: none;
+      resize: none;
+    }
+    .modal-textarea::placeholder { color: rgba(255,255,255,0.25); }
+    .modal-textarea--error { border-color: #e74c3c; }
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+    }
+    .modal-cancel-btn {
+      flex: 1;
+      background: rgba(255,255,255,0.08);
+      border: none;
+      color: #fff;
+      border-radius: 12px;
+      padding: 16px;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    .modal-ok-btn {
+      flex: 2;
       background: #4a9c5d;
       border: none;
       color: #fff;
-      border-radius: 8px;
-      padding: 6px 12px;
-      font-size: 0.82rem;
+      border-radius: 12px;
+      padding: 16px;
+      font-size: 1rem;
       font-weight: 600;
       cursor: pointer;
-      flex-shrink: 0;
     }
-    .config-ok-btn:disabled { opacity: 0.5; }
-    .config-cancel-btn {
-      background: none;
-      border: none;
-      color: rgba(255,255,255,0.35);
-      font-size: 0.82rem;
-      cursor: pointer;
-      padding: 6px 4px;
-      flex-shrink: 0;
-    }
+    .modal-ok-btn:disabled { opacity: 0.5; }
   </style>
 </head>
 <body>
@@ -218,6 +245,19 @@
     <p>Only jonatan.wulcan@gmail.com and karin.wulcan@gmail.com have access.</p>
     <p id="unauthorized-signed-in-as" style="font-size:0.85rem; margin-top:4px;"></p>
     <button class="btn btn-outline" id="btn-signout">Sign out and try again</button>
+  </div>
+
+  <div id="edit-modal" class="modal-overlay" hidden>
+    <div class="modal-card">
+      <div class="modal-title" id="modal-title"></div>
+      <textarea id="modal-textarea" class="modal-textarea"
+        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+        placeholder="Paste Spotify link…"></textarea>
+      <div class="modal-actions">
+        <button class="modal-cancel-btn" id="modal-cancel">Cancel</button>
+        <button class="modal-ok-btn" id="modal-ok">OK</button>
+      </div>
+    </div>
   </div>
 
   <div id="view-home" hidden>
@@ -298,67 +338,26 @@
 
       row.appendChild(keyEl);
       row.appendChild(meta);
-      row.addEventListener('click', () => switchToEditRow(key, row));
+      row.addEventListener('click', () => openEditModal(key));
       return row;
     }
 
-    function switchToEditRow(key, displayRow) {
-      const editRow = document.createElement('div');
-      editRow.className = 'config-row config-row--editing';
+    let editingKey = null;
 
-      const keyEl = document.createElement('span');
-      keyEl.className = 'config-key';
-      keyEl.textContent = key;
+    function openEditModal(key) {
+      editingKey = key;
+      document.getElementById('modal-title').textContent = `Key ${key}`;
+      const ta = document.getElementById('modal-textarea');
+      ta.value = '';
+      ta.classList.remove('modal-textarea--error');
+      document.getElementById('modal-ok').disabled = false;
+      document.getElementById('edit-modal').hidden = false;
+      ta.focus();
+    }
 
-      const input = document.createElement('input');
-      input.className = 'config-edit-input';
-      input.type = 'text';
-      input.autocomplete = 'off';
-      input.autocorrect = 'off';
-      input.autocapitalize = 'off';
-      input.spellcheck = false;
-      input.placeholder = 'Paste Spotify link…';
-
-      const cancelBtn = document.createElement('button');
-      cancelBtn.className = 'config-cancel-btn';
-      cancelBtn.textContent = 'Cancel';
-
-      const okBtn = document.createElement('button');
-      okBtn.className = 'config-ok-btn';
-      okBtn.textContent = 'OK';
-
-      editRow.appendChild(keyEl);
-      editRow.appendChild(input);
-      editRow.appendChild(cancelBtn);
-      editRow.appendChild(okBtn);
-      displayRow.replaceWith(editRow);
-      input.focus();
-
-      cancelBtn.addEventListener('click', () => {
-        editRow.replaceWith(makeDisplayRow(key));
-      });
-
-      okBtn.addEventListener('click', async () => {
-        const trackId = parseTrackId(input.value.trim());
-        if (!trackId) {
-          input.classList.add('config-edit-input--error');
-          return;
-        }
-        okBtn.disabled = true;
-        cancelBtn.disabled = true;
-        try {
-          await updateDoc(configRef, {
-            [`keybindings.${key}`]: { trackId, updatedAt: serverTimestamp() },
-          });
-          keybindings[key] = { trackId, updatedAt: new Date() };
-          editRow.replaceWith(makeDisplayRow(key));
-        } catch (e) {
-          console.error('Failed to save', e);
-          okBtn.disabled = false;
-          cancelBtn.disabled = false;
-          input.classList.add('config-edit-input--error');
-        }
-      });
+    function closeEditModal() {
+      document.getElementById('edit-modal').hidden = true;
+      editingKey = null;
     }
 
     function renderConfigList() {
@@ -427,6 +426,33 @@
 
       document.getElementById('btn-signout').addEventListener('click', () => signOut(auth));
       document.getElementById('btn-home-signout').addEventListener('click', () => signOut(auth));
+
+      document.getElementById('modal-cancel').addEventListener('click', closeEditModal);
+
+      document.getElementById('modal-ok').addEventListener('click', async () => {
+        const key = editingKey;
+        const ta = document.getElementById('modal-textarea');
+        const okBtn = document.getElementById('modal-ok');
+        const trackId = parseTrackId(ta.value.trim());
+        if (!trackId) {
+          ta.classList.add('modal-textarea--error');
+          return;
+        }
+        okBtn.disabled = true;
+        try {
+          await updateDoc(configRef, {
+            [`keybindings.${key}`]: { trackId, updatedAt: serverTimestamp() },
+          });
+          keybindings[key] = { trackId, updatedAt: new Date() };
+          const row = document.querySelector(`[data-key="${key}"]`);
+          if (row) row.querySelector('.config-meta').textContent = formatAge(keybindings[key].updatedAt);
+          closeEditModal();
+        } catch (e) {
+          console.error('Failed to save', e);
+          okBtn.disabled = false;
+          ta.classList.add('modal-textarea--error');
+        }
+      });
     }
 
     if ('serviceWorker' in navigator) {
