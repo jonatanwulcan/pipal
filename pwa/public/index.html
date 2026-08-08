@@ -21,16 +21,69 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 8px;
+      padding: 32px 24px;
+      text-align: center;
+      gap: 16px;
     }
     h1 { font-size: 2.5rem; }
-    p  { opacity: 0.6; }
+    p  { opacity: 0.6; line-height: 1.5; }
+
+    .install-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-top: 8px;
+    }
+    .step {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(255,255,255,0.07);
+      border-radius: 12px;
+      padding: 14px 16px;
+      text-align: left;
+    }
+    .step-icon {
+      font-size: 1.5rem;
+      flex-shrink: 0;
+    }
+    .step-text {
+      font-size: 0.95rem;
+      opacity: 0.85;
+      line-height: 1.4;
+    }
   </style>
 </head>
 <body>
   <h1>Pipal</h1>
-  <p>Hello world</p>
+
+  <div id="installed" hidden>
+    <p>Hello world</p>
+  </div>
+
+  <div id="not-installed" hidden>
+    <p>Install this app on your iPhone to get started.</p>
+    <div class="install-steps">
+      <div class="step">
+        <span class="step-icon">􀈂</span>
+        <span class="step-text">Tap the <strong>Share</strong> button at the bottom of Safari</span>
+      </div>
+      <div class="step">
+        <span class="step-icon">➕</span>
+        <span class="step-text">Tap <strong>Add to Home Screen</strong></span>
+      </div>
+      <div class="step">
+        <span class="step-icon">📱</span>
+        <span class="step-text">Open <strong>Pipal</strong> from your home screen</span>
+      </div>
+    </div>
+  </div>
+
   <script>
+    const isInstalled = window.navigator.standalone === true;
+
+    document.getElementById(isInstalled ? 'installed' : 'not-installed').hidden = false;
+
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js');
     }
