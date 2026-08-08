@@ -1,0 +1,8 @@
+{
+  "hosting": {
+    "site": "pipal-app",
+    "public": "public",
+    "ignore": ["firebase.json", "**/.*"],
+    "rewrites": [{ "source": "**", "destination": "/index.html" }]
+  }
+}
