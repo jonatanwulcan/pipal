@@ -85,7 +85,6 @@ class PlejdConnection:
             raise RuntimeError("No Plejd mesh devices found")
 
         best_device, _ = max(devices.values(), key=lambda x: x[1].rssi)
-        self._gw_mac = best_device.address
 
         client = BleakClient(best_device, disconnected_callback=self._on_disconnect)
         await client.connect()
@@ -101,6 +100,7 @@ class PlejdConnection:
             await client.disconnect()
             raise RuntimeError("Plejd authentication failed")
 
+        self._gw_mac = best_device.address
         self._client = client
         print("Plejd: connected to mesh", flush=True)
 
