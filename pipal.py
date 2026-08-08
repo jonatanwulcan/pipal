@@ -61,18 +61,37 @@ def _build_sonos_entries(keybindings):
 
 def _on_config_snapshot(doc_snapshots, changes, read_time):
     global KEY_MAP
+    print("Firestore: received config snapshot", flush=True)
     for snap in doc_snapshots:
-        if snap.exists:
+        if not snap.exists:
+            print("Firestore: configuration document missing in snapshot", flush=True)
+            continue
+        try:
             keybindings = snap.get('keybindings') or {}
             sonos_entries = _build_sonos_entries(keybindings)
+            old_map = KEY_MAP
             new_map = dict(PLEJD_ENTRIES)
             new_map.update(sonos_entries)
             KEY_MAP = new_map
-            print(f"Firestore: updated {len(sonos_entries)} song keys", flush=True)
+
+            changed = [
+                f"  {letter}: {sonos_entries.get(code, {}).get('track', '(removed)')}"
+                for letter, code in LETTER_TO_EVDEV.items()
+                if old_map.get(code, {}).get('track') != sonos_entries.get(code, {}).get('track')
+            ]
+            if changed:
+                print(f"Firestore: {len(changed)} key(s) updated:", flush=True)
+                for line in changed:
+                    print(line, flush=True)
+            else:
+                print("Firestore: snapshot received, no changes", flush=True)
+        except Exception as e:
+            print(f"Firestore: error processing snapshot: {e}", flush=True)
 
 
 def load_keybindings():
     """Blocking initial fetch from Firestore, then starts a live listener."""
+    print("Firestore: connecting...", flush=True)
     db = firestore.Client(project='pipal-app', credentials=AnonymousCredentials())
     config_ref = db.collection('configuration').document('main')
 
@@ -85,9 +104,15 @@ def load_keybindings():
     global KEY_MAP
     KEY_MAP = dict(PLEJD_ENTRIES)
     KEY_MAP.update(sonos_entries)
-    print(f"Firestore: loaded {len(sonos_entries)} song keys", flush=True)
+
+    print(f"Firestore: loaded {len(sonos_entries)} song keys:", flush=True)
+    for letter, code in LETTER_TO_EVDEV.items():
+        entry = sonos_entries.get(code)
+        track = entry['track'] if entry else '(missing)'
+        print(f"  {letter}: {track}", flush=True)
 
     config_ref.on_snapshot(_on_config_snapshot)
+    print("Firestore: live listener started", flush=True)
     return db  # keep reference alive so the listener isn't GC'd
 
 
