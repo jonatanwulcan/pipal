@@ -1,5 +1,3 @@
-import json
-import os
 import select
 import string
 import threading
@@ -10,9 +8,6 @@ from evdev import InputDevice, ecodes
 
 import plejd
 import sonos
-
-PLEJD_ADDRESS = 18  # Skrivbord
-CREDENTIALS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plejd_credentials.json")
 
 ALL_LEDS = [ecodes.LED_NUML, ecodes.LED_CAPSL, ecodes.LED_SCROLLL]
 
@@ -111,9 +106,6 @@ def main():
     print(f"Found keyboard: {keyboard.name}", flush=True)
     keyboard.grab()
 
-    with open(CREDENTIALS_FILE) as f:
-        creds = json.load(f)
-
     busy_modules = set()
     busy_lock = threading.Lock()
     blink_stop = threading.Event()
@@ -136,7 +128,7 @@ def main():
                 set_leds(keyboard, 0)
 
     sonos_module = sonos.SonosModule(lambda busy: on_busy('sonos', busy))
-    plejd_module = plejd.PlejdModule(creds["username"], creds["password"], creds["siteId"], PLEJD_ADDRESS, lambda busy: on_busy('plejd', busy))
+    plejd_module = plejd.PlejdModule(lambda busy: on_busy('plejd', busy))
 
     sonos_module.start()
     plejd_module.start()

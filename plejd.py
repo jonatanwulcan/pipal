@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import json
 import os
 import threading
 
@@ -126,11 +127,17 @@ class PlejdConnection:
             self._client = None
 
 
+CREDENTIALS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plejd_credentials.json")
+PLEJD_ADDRESS = 18  # Skrivbord
+
+
 class PlejdModule:
-    def __init__(self, username: str, password: str, site_id: str, address: int, on_busy):
+    def __init__(self, on_busy, credentials_file: str = CREDENTIALS_FILE, address: int = PLEJD_ADDRESS):
+        with open(credentials_file) as f:
+            creds = json.load(f)
         self._address  = address
         self._on_busy  = on_busy
-        self._conn     = PlejdConnection(username, password, site_id)
+        self._conn     = PlejdConnection(creds["username"], creds["password"], creds["siteId"])
         self._loop     = asyncio.new_event_loop()
         self._thread   = threading.Thread(target=self._loop.run_forever, daemon=True)
 
