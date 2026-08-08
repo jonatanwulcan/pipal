@@ -1,4 +1,3 @@
-import select
 import string
 import threading
 import time
@@ -74,17 +73,6 @@ def animate_leds(keyboard, stop_event):
         time.sleep(0.2)
 
 
-def drain_latest_key(keyboard, initial_code):
-    latest = initial_code
-    while True:
-        r, _, _ = select.select([keyboard.fd], [], [], 0)
-        if not r:
-            break
-        for event in keyboard.read():
-            if event.type == ecodes.EV_KEY and event.value == 1 and event.code in KEY_MAP:
-                latest = event.code
-    return latest
-
 
 def find_keyboard():
     for path in evdev.list_devices():
@@ -144,7 +132,6 @@ def main():
                 plejd_module.put(PLEJD_KEY_MAP[code])
 
             elif code in KEY_MAP:
-                code = drain_latest_key(keyboard, code)
                 url = TRACKS.get(KEY_MAP[code])
                 if url:
                     sonos_module.put(url)
