@@ -100,6 +100,7 @@
       flex: 1;
       overflow-y: auto;
       padding: 12px 16px;
+      padding-bottom: max(12px, env(safe-area-inset-bottom));
       display: flex;
       flex-direction: column;
       gap: 6px;
@@ -119,6 +120,12 @@
       background: rgba(255,255,255,0.05);
       border-radius: 10px;
       padding: 10px 14px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .config-row--editing {
+      background: rgba(255,255,255,0.08);
+      cursor: default;
     }
     .config-key {
       font-size: 1rem;
@@ -126,41 +133,45 @@
       width: 26px;
       flex-shrink: 0;
     }
-    .config-input {
+    .config-meta {
+      flex: 1;
+      font-size: 0.8rem;
+      opacity: 0.4;
+    }
+    .config-edit-input {
       flex: 1;
       min-width: 0;
       background: none;
       border: none;
-      color: rgba(255,255,255,0.55);
-      font-size: 0.78rem;
-      font-family: monospace;
+      border-bottom: 1px solid rgba(255,255,255,0.3);
+      color: #fff;
+      font-size: 0.8rem;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      padding: 4px 0;
       outline: none;
     }
-    .config-input:focus { color: #fff; }
-    .home-footer {
-      flex-shrink: 0;
-      padding: 14px 16px;
-      padding-bottom: max(14px, env(safe-area-inset-bottom));
-      border-top: 1px solid rgba(255,255,255,0.1);
-    }
-    .btn-save {
-      width: 100%;
+    .config-edit-input::placeholder { color: rgba(255,255,255,0.3); }
+    .config-edit-input--error { border-bottom-color: #e74c3c; }
+    .config-ok-btn {
       background: #4a9c5d;
-      color: #fff;
       border: none;
-      border-radius: 12px;
-      padding: 16px;
-      font-size: 1rem;
+      color: #fff;
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 0.82rem;
       font-weight: 600;
       cursor: pointer;
+      flex-shrink: 0;
     }
-    .btn-save:disabled { opacity: 0.45; }
-    .save-status {
-      text-align: center;
+    .config-ok-btn:disabled { opacity: 0.5; }
+    .config-cancel-btn {
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.35);
       font-size: 0.82rem;
-      margin-top: 8px;
-      min-height: 18px;
-      opacity: 0.6;
+      cursor: pointer;
+      padding: 6px 4px;
+      flex-shrink: 0;
     }
   </style>
 </head>
@@ -215,17 +226,13 @@
       <button class="btn-text" id="btn-home-signout">Sign out</button>
     </div>
     <div class="config-list" id="config-list"></div>
-    <div class="home-footer">
-      <button class="btn-save" id="btn-save">Save</button>
-      <p class="save-status" id="save-status"></p>
-    </div>
   </div>
 
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js';
     import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut }
       from 'https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js';
-    import { getFirestore, doc, getDoc, setDoc }
+    import { getFirestore, doc, getDoc, setDoc, updateDoc, serverTimestamp }
       from 'https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js';
 
     const ALLOWED = ['jonatan.wulcan@gmail.com', 'karin.wulcan@gmail.com'];
@@ -236,36 +243,36 @@
       'Å','Ä','Ö',
     ];
 
-    const DEFAULT_KEYBINDINGS = {
-      'A': 'https://open.spotify.com/track/24j01Gn8plo5U4gyYMPQws',
-      'B': 'https://open.spotify.com/track/5ygDXis42ncn6kYG14lEVG',
-      'C': 'https://open.spotify.com/track/5VpQpzSPO3adPtqKMGVYAD',
-      'D': 'https://open.spotify.com/track/6FK3E5XGjp2ViJAG4i2OJ1',
-      'E': 'https://open.spotify.com/track/7wPX68TYMcRFVuQXaWSZc2',
-      'F': 'https://open.spotify.com/track/3v6FM4daF3FiOrLpvOTmO4',
-      'G': 'https://open.spotify.com/track/5ZsbCNJeIZzeNGyplWY4M5',
-      'H': 'https://open.spotify.com/track/1OK9kmDfGXendaE4QwzrAI',
-      'I': 'https://open.spotify.com/track/3RriZsQmU4Jvp3Qh2oIZae',
-      'J': 'https://open.spotify.com/track/2ndZlMYvcZu0GnZj2ZRAgj',
-      'K': 'https://open.spotify.com/track/0gpzayawLbdlg37XvC43tU',
-      'L': 'https://open.spotify.com/track/4wQhYF06be3fv1l3qUiODJ',
-      'M': 'https://open.spotify.com/track/7CjLGz2MEU9vFssaZEXx8I',
-      'N': 'https://open.spotify.com/track/00IsaSz12SMPxi6KzpAg3F',
-      'O': 'https://open.spotify.com/track/0vwW2535lVhXVS4aXEjbHt',
-      'P': 'https://open.spotify.com/track/46aGIv3vi8IZwseswGSdoB',
-      'Q': 'https://open.spotify.com/track/2ELSVi4kwWOXgxiIC592tJ',
-      'R': 'https://open.spotify.com/track/0gDgvbu5BD67XyWa9yU7Y5',
-      'S': 'https://open.spotify.com/track/6Y6jq2el8dK1g00JppZXye',
-      'T': 'https://open.spotify.com/track/3STU5Q4eapZJ5VbKsjsEOY',
-      'U': 'https://open.spotify.com/track/72xYXlxyC33XhFmlwzrv61',
-      'V': 'https://open.spotify.com/track/1CFWilgSeS4xbiZFYbQbUx',
-      'W': 'https://open.spotify.com/track/63Tl9k1sH8tznn3bqoMuyF',
-      'X': 'https://open.spotify.com/track/3Tp6XRivI85TAfpgja9ILh',
-      'Y': 'https://open.spotify.com/track/1n15KtnkIknQUohNa9E0kT',
-      'Z': 'https://open.spotify.com/track/49wOjOkS4pBK3PQnPnNYjb',
-      'Å': 'https://open.spotify.com/track/1bBgHQoZCJ5FzkxrkL1PQ9',
-      'Ä': 'https://open.spotify.com/track/72ylSapVzIEe8QH4gssLwF',
-      'Ö': 'https://open.spotify.com/track/29fNIVCogo4jpvKgTtIwyb',
+    const DEFAULT_TRACK_IDS = {
+      'A': '24j01Gn8plo5U4gyYMPQws',
+      'B': '5ygDXis42ncn6kYG14lEVG',
+      'C': '5VpQpzSPO3adPtqKMGVYAD',
+      'D': '6FK3E5XGjp2ViJAG4i2OJ1',
+      'E': '7wPX68TYMcRFVuQXaWSZc2',
+      'F': '3v6FM4daF3FiOrLpvOTmO4',
+      'G': '5ZsbCNJeIZzeNGyplWY4M5',
+      'H': '1OK9kmDfGXendaE4QwzrAI',
+      'I': '3RriZsQmU4Jvp3Qh2oIZae',
+      'J': '2ndZlMYvcZu0GnZj2ZRAgj',
+      'K': '0gpzayawLbdlg37XvC43tU',
+      'L': '4wQhYF06be3fv1l3qUiODJ',
+      'M': '7CjLGz2MEU9vFssaZEXx8I',
+      'N': '00IsaSz12SMPxi6KzpAg3F',
+      'O': '0vwW2535lVhXVS4aXEjbHt',
+      'P': '46aGIv3vi8IZwseswGSdoB',
+      'Q': '2ELSVi4kwWOXgxiIC592tJ',
+      'R': '0gDgvbu5BD67XyWa9yU7Y5',
+      'S': '6Y6jq2el8dK1g00JppZXye',
+      'T': '3STU5Q4eapZJ5VbKsjsEOY',
+      'U': '72xYXlxyC33XhFmlwzrv61',
+      'V': '1CFWilgSeS4xbiZFYbQbUx',
+      'W': '63Tl9k1sH8tznn3bqoMuyF',
+      'X': '3Tp6XRivI85TAfpgja9ILh',
+      'Y': '1n15KtnkIknQUohNa9E0kT',
+      'Z': '49wOjOkS4pBK3PQnPnNYjb',
+      'Å': '1bBgHQoZCJ5FzkxrkL1PQ9',
+      'Ä': '72ylSapVzIEe8QH4gssLwF',
+      'Ö': '29fNIVCogo4jpvKgTtIwyb',
     };
 
     const app = initializeApp({
@@ -280,12 +287,127 @@
     const provider  = new GoogleAuthProvider();
     const configRef = doc(db, 'configuration', 'main');
 
+    // In-memory state: { A: { trackId, updatedAt: Date|null }, ... }
+    let keybindings = {};
+
     function show(id) {
       document.querySelectorAll('[id^="view-"]').forEach(el => { el.hidden = true; });
       document.getElementById(id).hidden = false;
     }
 
-    function renderConfigList(keybindings) {
+    function parseTrackId(input) {
+      const m = input.match(/open\.spotify\.com\/track\/([A-Za-z0-9]+)/);
+      if (m) return m[1];
+      if (/^[A-Za-z0-9]{22}$/.test(input.trim())) return input.trim();
+      return null;
+    }
+
+    function formatAge(date) {
+      if (!date) return '—';
+      const d = date?.toDate ? date.toDate() : date;
+      const diffMs = Date.now() - d.getTime();
+      const diffMin = Math.floor(diffMs / 60000);
+      const diffHour = Math.floor(diffMin / 60);
+      if (diffMin < 1) return 'just now';
+      if (diffMin < 60) return `${diffMin}m ago`;
+      if (diffHour < 24) return `${diffHour}h ago`;
+      return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    }
+
+    function normalizeKeybindings(data) {
+      const result = {};
+      for (const key of SONG_KEYS) {
+        const v = data[key];
+        if (typeof v === 'string') {
+          const m = v.match(/open\.spotify\.com\/track\/([A-Za-z0-9]+)/);
+          result[key] = { trackId: m ? m[1] : v, updatedAt: null };
+        } else if (v?.trackId) {
+          result[key] = { trackId: v.trackId, updatedAt: v.updatedAt ?? null };
+        } else {
+          result[key] = { trackId: DEFAULT_TRACK_IDS[key] ?? '', updatedAt: null };
+        }
+      }
+      return result;
+    }
+
+    function makeDisplayRow(key) {
+      const row = document.createElement('div');
+      row.className = 'config-row';
+
+      const keyEl = document.createElement('span');
+      keyEl.className = 'config-key';
+      keyEl.textContent = key;
+
+      const meta = document.createElement('span');
+      meta.className = 'config-meta';
+      meta.textContent = formatAge(keybindings[key]?.updatedAt);
+
+      row.appendChild(keyEl);
+      row.appendChild(meta);
+      row.addEventListener('click', () => switchToEditRow(key, row));
+      return row;
+    }
+
+    function switchToEditRow(key, displayRow) {
+      const editRow = document.createElement('div');
+      editRow.className = 'config-row config-row--editing';
+
+      const keyEl = document.createElement('span');
+      keyEl.className = 'config-key';
+      keyEl.textContent = key;
+
+      const input = document.createElement('input');
+      input.className = 'config-edit-input';
+      input.type = 'text';
+      input.autocomplete = 'off';
+      input.autocorrect = 'off';
+      input.autocapitalize = 'off';
+      input.spellcheck = false;
+      input.placeholder = 'Paste Spotify link…';
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'config-cancel-btn';
+      cancelBtn.textContent = 'Cancel';
+
+      const okBtn = document.createElement('button');
+      okBtn.className = 'config-ok-btn';
+      okBtn.textContent = 'OK';
+
+      editRow.appendChild(keyEl);
+      editRow.appendChild(input);
+      editRow.appendChild(cancelBtn);
+      editRow.appendChild(okBtn);
+      displayRow.replaceWith(editRow);
+      input.focus();
+
+      cancelBtn.addEventListener('click', () => {
+        editRow.replaceWith(makeDisplayRow(key));
+      });
+
+      okBtn.addEventListener('click', async () => {
+        const trackId = parseTrackId(input.value.trim());
+        if (!trackId) {
+          input.classList.add('config-edit-input--error');
+          return;
+        }
+        okBtn.disabled = true;
+        cancelBtn.disabled = true;
+        try {
+          await updateDoc(configRef, {
+            [`keybindings.${key}`]: { trackId, updatedAt: serverTimestamp() },
+          });
+          keybindings[key] = { trackId, updatedAt: new Date() };
+          editRow.replaceWith(makeDisplayRow(key));
+        } catch (e) {
+          console.error('Failed to save', e);
+          okBtn.disabled = false;
+          cancelBtn.disabled = false;
+          input.classList.add('config-edit-input--error');
+        }
+      });
+    }
+
+    function renderConfigList() {
       const list = document.getElementById('config-list');
       list.innerHTML = '';
 
@@ -295,62 +417,29 @@
       list.appendChild(title);
 
       for (const key of SONG_KEYS) {
-        const row = document.createElement('div');
-        row.className = 'config-row';
-
-        const keyEl = document.createElement('span');
-        keyEl.className = 'config-key';
-        keyEl.textContent = key;
-
-        const input = document.createElement('input');
-        input.className = 'config-input';
-        input.type = 'url';
-        input.inputMode = 'url';
-        input.value = keybindings[key] ?? '';
-        input.placeholder = 'Spotify URL';
-        input.dataset.key = key;
-
-
-        row.appendChild(keyEl);
-        row.appendChild(input);
-        list.appendChild(row);
+        list.appendChild(makeDisplayRow(key));
       }
     }
 
     async function loadConfig() {
       try {
         const snap = await getDoc(configRef);
-        const keybindings = snap.exists()
-          ? (snap.data().keybindings ?? DEFAULT_KEYBINDINGS)
-          : DEFAULT_KEYBINDINGS;
-        renderConfigList(keybindings);
+        if (snap.exists()) {
+          keybindings = normalizeKeybindings(snap.data().keybindings ?? {});
+        } else {
+          keybindings = normalizeKeybindings({});
+          // Initialise document so updateDoc always works
+          const defaults = {};
+          for (const key of SONG_KEYS) {
+            defaults[key] = { trackId: DEFAULT_TRACK_IDS[key] ?? '', updatedAt: null };
+          }
+          await setDoc(configRef, { keybindings: defaults });
+        }
       } catch (e) {
         console.error('Failed to load config', e);
-        renderConfigList(DEFAULT_KEYBINDINGS);
+        keybindings = normalizeKeybindings({});
       }
-    }
-
-    async function saveConfig() {
-      const btn    = document.getElementById('btn-save');
-      const status = document.getElementById('save-status');
-      btn.disabled = true;
-      status.textContent = 'Saving…';
-
-      const keybindings = {};
-      document.querySelectorAll('.config-input').forEach(input => {
-        keybindings[input.dataset.key] = input.value.trim();
-      });
-
-      try {
-        await setDoc(configRef, { keybindings }, { merge: true });
-        status.textContent = 'Saved ✓';
-        setTimeout(() => { status.textContent = ''; }, 2000);
-      } catch (e) {
-        console.error('Failed to save config', e);
-        status.textContent = 'Failed to save. Try again.';
-      } finally {
-        btn.disabled = false;
-      }
+      renderConfigList();
     }
 
     if (!window.navigator.standalone) {
@@ -379,7 +468,6 @@
 
       document.getElementById('btn-signout').addEventListener('click', () => signOut(auth));
       document.getElementById('btn-home-signout').addEventListener('click', () => signOut(auth));
-      document.getElementById('btn-save').addEventListener('click', saveConfig);
     }
 
     if ('serviceWorker' in navigator) {
