@@ -60,9 +60,9 @@ def set_leds(keyboard, state):
         keyboard.set_led(led, state)
 
 
-def manage_leds(keyboard, modules):
+def manage_leds(keyboard, modules, stop_event):
     idx = 0
-    while True:
+    while not stop_event.is_set():
         if any(m.is_busy for m in modules):
             for led in ALL_LEDS:
                 keyboard.set_led(led, 0)
@@ -99,7 +99,9 @@ def main():
     sonos_module.start()
     plejd_module.start()
 
-    threading.Thread(target=manage_leds, args=(keyboard, [sonos_module, plejd_module]), daemon=True).start()
+    led_stop = threading.Event()
+    led_thread = threading.Thread(target=manage_leds, args=(keyboard, [sonos_module, plejd_module], led_stop), daemon=True)
+    led_thread.start()
 
     try:
         for event in keyboard.read_loop():
@@ -116,6 +118,8 @@ def main():
                 plejd_module.put(binding["dim"])
 
     finally:
+        led_stop.set()
+        led_thread.join(timeout=0.5)
         sonos_module.stop()
         plejd_module.stop()
         keyboard.ungrab()
