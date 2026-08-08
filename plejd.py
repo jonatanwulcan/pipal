@@ -18,9 +18,8 @@ _API_HEADERS = {
     "Content-Type": "application/json",
 }
 
-# Command codes
-_CMD_STATE       = 0x0097  # on/off only
-_CMD_STATE_LEVEL = 0x0098  # on + dim level
+_CMD_STATE       = 0x0097
+_CMD_STATE_LEVEL = 0x0098
 
 
 def _encrypt_decrypt(key_hex: str, addr_hex: str, data: bytes) -> bytes:
@@ -48,32 +47,79 @@ async def _fetch_cryptokey(username: str, password: str, site_id: str) -> str:
         resp = await session.post("/parse/login", json={"username": username, "password": password})
         resp.raise_for_status()
         token = (await resp.json())["sessionToken"]
-
         session.headers["X-Parse-Session-Token"] = token
         resp = await session.post("/parse/functions/getSiteById", params={"siteId": site_id})
         resp.raise_for_status()
         return (await resp.json())["result"][0]["plejdMesh"]["cryptoKey"]
 
 
-async def control(username: str, password: str, site_id: str, address: int, dim: int | None) -> None:
-    cryptokey = await _fetch_cryptokey(username, password, site_id)
+class PlejdConnection:
+    def __init__(self, username: str, password: str, site_id: str):
+        self._username  = username
+        self._password  = password
+        self._site_id   = site_id
+        self._cryptokey = None
+        self._client    = None
+        self._gw_mac    = None
+        self._lock      = None
 
-    devices = await BleakScanner.discover(timeout=2.0, service_uuids=[SERVICE], return_adv=True)
-    if not devices:
-        raise RuntimeError("No Plejd mesh devices found")
+    async def _get_lock(self):
+        import asyncio
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
 
-    best_device, _ = max(devices.values(), key=lambda x: x[1].rssi)
+    def _on_disconnect(self, _client):
+        print("Plejd: disconnected from mesh", flush=True)
+        self._client = None
+        self._gw_mac = None
 
-    async with BleakClient(best_device) as client:
+    async def _connect(self):
+        if not self._cryptokey:
+            self._cryptokey = await _fetch_cryptokey(self._username, self._password, self._site_id)
+
+        devices = await BleakScanner.discover(timeout=2.0, service_uuids=[SERVICE], return_adv=True)
+        if not devices:
+            raise RuntimeError("No Plejd mesh devices found")
+
+        best_device, _ = max(devices.values(), key=lambda x: x[1].rssi)
+        self._gw_mac = best_device.address
+
+        client = BleakClient(best_device, disconnected_callback=self._on_disconnect)
+        await client.connect()
+
         await client.write_gatt_char(_AUTH, b"\x00", response=True)
         challenge = bytes(await client.read_gatt_char(_AUTH))
-        await client.write_gatt_char(_AUTH, _auth_response(cryptokey, challenge), response=True)
+        await client.write_gatt_char(_AUTH, _auth_response(self._cryptokey, challenge), response=True)
 
         ping = bytes([os.urandom(1)[0]])
         await client.write_gatt_char(_PING, ping, response=True)
         pong = bytes(await client.read_gatt_char(_PING))
         if (ping[0] + 1) & 0xFF != pong[0]:
+            await client.disconnect()
             raise RuntimeError("Plejd authentication failed")
 
-        cmd = _build_command(address, dim)
-        await client.write_gatt_char(_DATA, _encrypt_decrypt(cryptokey, best_device.address, cmd), response=True)
+        self._client = client
+        print("Plejd: connected to mesh", flush=True)
+
+    async def warmup(self):
+        lock = await self._get_lock()
+        async with lock:
+            try:
+                await self._connect()
+            except Exception as e:
+                print(f"Plejd: startup connect failed: {e}", flush=True)
+
+    async def send(self, address: int, dim: int | None):
+        lock = await self._get_lock()
+        async with lock:
+            if self._client is None:
+                await self._connect()
+            cmd = _build_command(address, dim)
+            encrypted = _encrypt_decrypt(self._cryptokey, self._gw_mac, cmd)
+            await self._client.write_gatt_char(_DATA, encrypted, response=True)
+
+    async def close(self):
+        if self._client:
+            await self._client.disconnect()
+            self._client = None
