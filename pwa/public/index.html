@@ -211,7 +211,7 @@
 
   <div id="view-home" hidden>
     <div class="home-header">
-      <h1>Pipal <span style="font-size:0.55em; opacity:0.45; font-weight:400;">v1.5</span></h1>
+      <h1>Pipal <span id="sw-version" style="font-size:0.55em; opacity:0.45; font-weight:400;"></span></h1>
       <button class="btn-text" id="btn-home-signout">Sign out</button>
     </div>
     <div class="config-list" id="config-list"></div>
@@ -385,6 +385,14 @@
     if ('serviceWorker' in navigator) {
       const reg = await navigator.serviceWorker.register('/sw.js');
       navigator.serviceWorker.addEventListener('controllerchange', () => window.location.reload());
+      navigator.serviceWorker.addEventListener('message', event => {
+        if (event.data?.type === 'VERSION') {
+          document.getElementById('sw-version').textContent = event.data.version;
+        }
+      });
+      const askVersion = () => navigator.serviceWorker.controller?.postMessage({ type: 'GET_VERSION' });
+      askVersion();
+      navigator.serviceWorker.ready.then(askVersion);
       reg.update();
       setInterval(() => reg.update(), 10000);
     }
