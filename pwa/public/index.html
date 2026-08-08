@@ -232,7 +232,7 @@
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js';
     import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut }
       from 'https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js';
-    import { getFirestore, doc, getDoc, setDoc, updateDoc, serverTimestamp }
+    import { getFirestore, doc, onSnapshot, updateDoc, serverTimestamp }
       from 'https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js';
 
     const ALLOWED = ['jonatan.wulcan@gmail.com', 'karin.wulcan@gmail.com'];
@@ -242,38 +242,6 @@
       'N','O','P','Q','R','S','T','U','V','W','X','Y','Z',
       'Å','Ä','Ö',
     ];
-
-    const DEFAULT_TRACK_IDS = {
-      'A': '24j01Gn8plo5U4gyYMPQws',
-      'B': '5ygDXis42ncn6kYG14lEVG',
-      'C': '5VpQpzSPO3adPtqKMGVYAD',
-      'D': '6FK3E5XGjp2ViJAG4i2OJ1',
-      'E': '7wPX68TYMcRFVuQXaWSZc2',
-      'F': '3v6FM4daF3FiOrLpvOTmO4',
-      'G': '5ZsbCNJeIZzeNGyplWY4M5',
-      'H': '1OK9kmDfGXendaE4QwzrAI',
-      'I': '3RriZsQmU4Jvp3Qh2oIZae',
-      'J': '2ndZlMYvcZu0GnZj2ZRAgj',
-      'K': '0gpzayawLbdlg37XvC43tU',
-      'L': '4wQhYF06be3fv1l3qUiODJ',
-      'M': '7CjLGz2MEU9vFssaZEXx8I',
-      'N': '00IsaSz12SMPxi6KzpAg3F',
-      'O': '0vwW2535lVhXVS4aXEjbHt',
-      'P': '46aGIv3vi8IZwseswGSdoB',
-      'Q': '2ELSVi4kwWOXgxiIC592tJ',
-      'R': '0gDgvbu5BD67XyWa9yU7Y5',
-      'S': '6Y6jq2el8dK1g00JppZXye',
-      'T': '3STU5Q4eapZJ5VbKsjsEOY',
-      'U': '72xYXlxyC33XhFmlwzrv61',
-      'V': '1CFWilgSeS4xbiZFYbQbUx',
-      'W': '63Tl9k1sH8tznn3bqoMuyF',
-      'X': '3Tp6XRivI85TAfpgja9ILh',
-      'Y': '1n15KtnkIknQUohNa9E0kT',
-      'Z': '49wOjOkS4pBK3PQnPnNYjb',
-      'Å': '1bBgHQoZCJ5FzkxrkL1PQ9',
-      'Ä': '72ylSapVzIEe8QH4gssLwF',
-      'Ö': '29fNIVCogo4jpvKgTtIwyb',
-    };
 
     const app = initializeApp({
       apiKey: 'AIzaSyAdcZU_5I3ix69F8RCBM0luvAlrNm79-hk',
@@ -289,6 +257,7 @@
 
     // In-memory state: { A: { trackId, updatedAt: Date|null }, ... }
     let keybindings = {};
+    let configUnsub = null;
 
     function show(id) {
       document.querySelectorAll('[id^="view-"]').forEach(el => { el.hidden = true; });
@@ -314,25 +283,10 @@
       return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     }
 
-    function normalizeKeybindings(data) {
-      const result = {};
-      for (const key of SONG_KEYS) {
-        const v = data[key];
-        if (typeof v === 'string') {
-          const m = v.match(/open\.spotify\.com\/track\/([A-Za-z0-9]+)/);
-          result[key] = { trackId: m ? m[1] : v, updatedAt: null };
-        } else if (v?.trackId) {
-          result[key] = { trackId: v.trackId, updatedAt: v.updatedAt ?? null };
-        } else {
-          result[key] = { trackId: DEFAULT_TRACK_IDS[key] ?? '', updatedAt: null };
-        }
-      }
-      return result;
-    }
-
     function makeDisplayRow(key) {
       const row = document.createElement('div');
       row.className = 'config-row';
+      row.dataset.key = key;
 
       const keyEl = document.createElement('span');
       keyEl.className = 'config-key';
@@ -421,25 +375,29 @@
       }
     }
 
-    async function loadConfig() {
-      try {
-        const snap = await getDoc(configRef);
-        if (snap.exists()) {
-          keybindings = normalizeKeybindings(snap.data().keybindings ?? {});
-        } else {
-          keybindings = normalizeKeybindings({});
-          // Initialise document so updateDoc always works
-          const defaults = {};
-          for (const key of SONG_KEYS) {
-            defaults[key] = { trackId: DEFAULT_TRACK_IDS[key] ?? '', updatedAt: null };
-          }
-          await setDoc(configRef, { keybindings: defaults });
-        }
-      } catch (e) {
-        console.error('Failed to load config', e);
-        keybindings = normalizeKeybindings({});
+    function refreshAges() {
+      for (const key of SONG_KEYS) {
+        const row = document.querySelector(`[data-key="${key}"]`);
+        if (row) row.querySelector('.config-meta').textContent = formatAge(keybindings[key].updatedAt);
       }
-      renderConfigList();
+    }
+
+    function startConfigListener() {
+      let initialRender = true;
+      configUnsub = onSnapshot(configRef, (snap) => {
+        const data = snap.exists() ? (snap.data().keybindings ?? {}) : {};
+        for (const key of SONG_KEYS) {
+          const v = data[key];
+          keybindings[key] = { trackId: v?.trackId ?? '', updatedAt: v?.updatedAt ?? null };
+        }
+        if (initialRender) {
+          renderConfigList();
+          setInterval(refreshAges, 60000);
+          initialRender = false;
+        } else {
+          refreshAges();
+        }
+      }, (e) => console.error('Config listener error', e));
     }
 
     if (!window.navigator.standalone) {
@@ -448,6 +406,7 @@
       show('view-loading');
 
       onAuthStateChanged(auth, (user) => {
+        if (configUnsub) { configUnsub(); configUnsub = null; }
         if (!user) {
           show('view-signin');
           return;
@@ -458,7 +417,7 @@
           return;
         }
         show('view-home');
-        loadConfig();
+        startConfigListener();
       });
 
       document.getElementById('btn-signin').addEventListener('click', async () => {
