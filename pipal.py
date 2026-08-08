@@ -3,42 +3,32 @@ import time
 
 import evdev
 from evdev import InputDevice, ecodes
+from google.auth.credentials import AnonymousCredentials
+from google.cloud import firestore
 
 import plejd
 import sonos
 
 ALL_LEDS = [ecodes.LED_NUML, ecodes.LED_CAPSL, ecodes.LED_SCROLLL]
 
-KEY_MAP = {
-    ecodes.KEY_A: {"action": "sonos", "track": "https://open.spotify.com/track/24j01Gn8plo5U4gyYMPQws"},
-    ecodes.KEY_B: {"action": "sonos", "track": "https://open.spotify.com/track/5ygDXis42ncn6kYG14lEVG"},
-    ecodes.KEY_C: {"action": "sonos", "track": "https://open.spotify.com/track/5VpQpzSPO3adPtqKMGVYAD"},
-    ecodes.KEY_D: {"action": "sonos", "track": "https://open.spotify.com/track/6FK3E5XGjp2ViJAG4i2OJ1"},
-    ecodes.KEY_E: {"action": "sonos", "track": "https://open.spotify.com/track/7wPX68TYMcRFVuQXaWSZc2"},
-    ecodes.KEY_F: {"action": "sonos", "track": "https://open.spotify.com/track/3v6FM4daF3FiOrLpvOTmO4"},
-    ecodes.KEY_G: {"action": "sonos", "track": "https://open.spotify.com/track/5ZsbCNJeIZzeNGyplWY4M5"},
-    ecodes.KEY_H: {"action": "sonos", "track": "https://open.spotify.com/track/1OK9kmDfGXendaE4QwzrAI"},
-    ecodes.KEY_I: {"action": "sonos", "track": "https://open.spotify.com/track/3RriZsQmU4Jvp3Qh2oIZae"},
-    ecodes.KEY_J: {"action": "sonos", "track": "https://open.spotify.com/track/2ndZlMYvcZu0GnZj2ZRAgj"},
-    ecodes.KEY_K: {"action": "sonos", "track": "https://open.spotify.com/track/0gpzayawLbdlg37XvC43tU"},
-    ecodes.KEY_L: {"action": "sonos", "track": "https://open.spotify.com/track/4wQhYF06be3fv1l3qUiODJ"},
-    ecodes.KEY_M: {"action": "sonos", "track": "https://open.spotify.com/track/7CjLGz2MEU9vFssaZEXx8I"},
-    ecodes.KEY_N: {"action": "sonos", "track": "https://open.spotify.com/track/00IsaSz12SMPxi6KzpAg3F"},
-    ecodes.KEY_O: {"action": "sonos", "track": "https://open.spotify.com/track/0vwW2535lVhXVS4aXEjbHt"},
-    ecodes.KEY_P: {"action": "sonos", "track": "https://open.spotify.com/track/46aGIv3vi8IZwseswGSdoB"},
-    ecodes.KEY_Q: {"action": "sonos", "track": "https://open.spotify.com/track/2ELSVi4kwWOXgxiIC592tJ"},
-    ecodes.KEY_R: {"action": "sonos", "track": "https://open.spotify.com/track/0gDgvbu5BD67XyWa9yU7Y5"},
-    ecodes.KEY_S: {"action": "sonos", "track": "https://open.spotify.com/track/6Y6jq2el8dK1g00JppZXye"},
-    ecodes.KEY_T: {"action": "sonos", "track": "https://open.spotify.com/track/3STU5Q4eapZJ5VbKsjsEOY"},
-    ecodes.KEY_U: {"action": "sonos", "track": "https://open.spotify.com/track/72xYXlxyC33XhFmlwzrv61"},
-    ecodes.KEY_V: {"action": "sonos", "track": "https://open.spotify.com/track/1CFWilgSeS4xbiZFYbQbUx"},
-    ecodes.KEY_W: {"action": "sonos", "track": "https://open.spotify.com/track/63Tl9k1sH8tznn3bqoMuyF"},
-    ecodes.KEY_X: {"action": "sonos", "track": "https://open.spotify.com/track/3Tp6XRivI85TAfpgja9ILh"},
-    ecodes.KEY_Y: {"action": "sonos", "track": "https://open.spotify.com/track/1n15KtnkIknQUohNa9E0kT"},
-    ecodes.KEY_Z: {"action": "sonos", "track": "https://open.spotify.com/track/49wOjOkS4pBK3PQnPnNYjb"},
-    ecodes.KEY_LEFTBRACE:  {"action": "sonos", "track": "https://open.spotify.com/track/1bBgHQoZCJ5FzkxrkL1PQ9"},  # å
-    ecodes.KEY_APOSTROPHE: {"action": "sonos", "track": "https://open.spotify.com/track/72ylSapVzIEe8QH4gssLwF"},  # ä
-    ecodes.KEY_SEMICOLON:  {"action": "sonos", "track": "https://open.spotify.com/track/29fNIVCogo4jpvKgTtIwyb"},  # ö
+# Letter keys on the keyboard map to different evdev codes depending on layout.
+# The Pi uses a Swedish layout where Å/Ä/Ö land on these physical keys.
+LETTER_TO_EVDEV = {
+    'A': ecodes.KEY_A, 'B': ecodes.KEY_B, 'C': ecodes.KEY_C,
+    'D': ecodes.KEY_D, 'E': ecodes.KEY_E, 'F': ecodes.KEY_F,
+    'G': ecodes.KEY_G, 'H': ecodes.KEY_H, 'I': ecodes.KEY_I,
+    'J': ecodes.KEY_J, 'K': ecodes.KEY_K, 'L': ecodes.KEY_L,
+    'M': ecodes.KEY_M, 'N': ecodes.KEY_N, 'O': ecodes.KEY_O,
+    'P': ecodes.KEY_P, 'Q': ecodes.KEY_Q, 'R': ecodes.KEY_R,
+    'S': ecodes.KEY_S, 'T': ecodes.KEY_T, 'U': ecodes.KEY_U,
+    'V': ecodes.KEY_V, 'W': ecodes.KEY_W, 'X': ecodes.KEY_X,
+    'Y': ecodes.KEY_Y, 'Z': ecodes.KEY_Z,
+    'Å': ecodes.KEY_LEFTBRACE,
+    'Ä': ecodes.KEY_APOSTROPHE,
+    'Ö': ecodes.KEY_SEMICOLON,
+}
+
+PLEJD_ENTRIES = {
     ecodes.KEY_F1:  {"action": "plejd", "dim": 21},
     ecodes.KEY_F2:  {"action": "plejd", "dim": 42},
     ecodes.KEY_F3:  {"action": "plejd", "dim": 63},
@@ -53,6 +43,52 @@ KEY_MAP = {
     ecodes.KEY_F12: {"action": "plejd", "dim": 255},
     ecodes.KEY_ESC: {"action": "plejd", "dim": None},
 }
+
+KEY_MAP = dict(PLEJD_ENTRIES)
+
+
+def _build_sonos_entries(keybindings):
+    entries = {}
+    for letter, evdev_code in LETTER_TO_EVDEV.items():
+        v = keybindings.get(letter)
+        if v and v.get('trackId'):
+            entries[evdev_code] = {
+                "action": "sonos",
+                "track": f"https://open.spotify.com/track/{v['trackId']}",
+            }
+    return entries
+
+
+def _on_config_snapshot(doc_snapshots, changes, read_time):
+    global KEY_MAP
+    for snap in doc_snapshots:
+        if snap.exists:
+            keybindings = snap.get('keybindings') or {}
+            sonos_entries = _build_sonos_entries(keybindings)
+            new_map = dict(PLEJD_ENTRIES)
+            new_map.update(sonos_entries)
+            KEY_MAP = new_map
+            print(f"Firestore: updated {len(sonos_entries)} song keys", flush=True)
+
+
+def load_keybindings():
+    """Blocking initial fetch from Firestore, then starts a live listener."""
+    db = firestore.Client(project='pipal-app', credentials=AnonymousCredentials())
+    config_ref = db.collection('configuration').document('main')
+
+    snap = config_ref.get()
+    if not snap.exists:
+        raise RuntimeError("Firestore: configuration document not found")
+
+    keybindings = snap.get('keybindings') or {}
+    sonos_entries = _build_sonos_entries(keybindings)
+    global KEY_MAP
+    KEY_MAP = dict(PLEJD_ENTRIES)
+    KEY_MAP.update(sonos_entries)
+    print(f"Firestore: loaded {len(sonos_entries)} song keys", flush=True)
+
+    config_ref.on_snapshot(_on_config_snapshot)
+    return db  # keep reference alive so the listener isn't GC'd
 
 
 def set_leds(keyboard, state):
@@ -85,6 +121,8 @@ def find_keyboard():
 
 
 def main():
+    db = load_keybindings()
+
     keyboard = find_keyboard()
     if not keyboard:
         print("No keyboard found", flush=True)
