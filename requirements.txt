@@ -3,3 +3,4 @@ soco
 bleak
 aiohttp
 cryptography
+google-cloud-firestore
