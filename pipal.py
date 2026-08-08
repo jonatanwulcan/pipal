@@ -60,13 +60,16 @@ def set_leds(keyboard, state):
         keyboard.set_led(led, state)
 
 
-def animate_leds(keyboard, stop_event):
+def manage_leds(keyboard, modules):
     idx = 0
-    while not stop_event.is_set():
-        for led in ALL_LEDS:
-            keyboard.set_led(led, 0)
-        keyboard.set_led(ALL_LEDS[idx % 3], 1)
-        idx += 1
+    while True:
+        if any(m.is_busy for m in modules):
+            for led in ALL_LEDS:
+                keyboard.set_led(led, 0)
+            keyboard.set_led(ALL_LEDS[idx % 3], 1)
+            idx += 1
+        else:
+            set_leds(keyboard, 0)
         time.sleep(0.2)
 
 
@@ -90,32 +93,13 @@ def main():
     print(f"Found keyboard: {keyboard.name}", flush=True)
     keyboard.grab()
 
-    busy_modules = set()
-    busy_lock = threading.Lock()
-    blink_stop = threading.Event()
-    blink_thread = None
-
-    def on_busy(name, is_busy):
-        nonlocal blink_thread
-        with busy_lock:
-            if is_busy:
-                busy_modules.add(name)
-            else:
-                busy_modules.discard(name)
-            if busy_modules:
-                if blink_thread is None or not blink_thread.is_alive():
-                    blink_stop.clear()
-                    blink_thread = threading.Thread(target=animate_leds, args=(keyboard, blink_stop), daemon=True)
-                    blink_thread.start()
-            else:
-                blink_stop.set()
-                set_leds(keyboard, 0)
-
-    sonos_module = sonos.SonosModule(lambda busy: on_busy('sonos', busy))
-    plejd_module = plejd.PlejdModule(lambda busy: on_busy('plejd', busy))
+    sonos_module = sonos.SonosModule()
+    plejd_module = plejd.PlejdModule()
 
     sonos_module.start()
     plejd_module.start()
+
+    threading.Thread(target=manage_leds, args=(keyboard, [sonos_module, plejd_module]), daemon=True).start()
 
     try:
         for event in keyboard.read_loop():
@@ -134,9 +118,6 @@ def main():
     finally:
         sonos_module.stop()
         plejd_module.stop()
-        blink_stop.set()
-        if blink_thread and blink_thread.is_alive():
-            blink_thread.join()
         keyboard.ungrab()
         set_leds(keyboard, 0)
 

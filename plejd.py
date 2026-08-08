@@ -132,14 +132,14 @@ PLEJD_ADDRESS = 18  # Skrivbord
 
 
 class PlejdModule:
-    def __init__(self, on_busy, credentials_file: str = CREDENTIALS_FILE, address: int = PLEJD_ADDRESS):
+    def __init__(self, credentials_file: str = CREDENTIALS_FILE, address: int = PLEJD_ADDRESS):
         with open(credentials_file) as f:
             creds = json.load(f)
         self._address  = address
-        self._on_busy  = on_busy
         self._conn     = PlejdConnection(creds["username"], creds["password"], creds["siteId"])
         self._loop     = asyncio.new_event_loop()
         self._thread   = threading.Thread(target=self._loop.run_forever, daemon=True)
+        self.is_busy   = False
 
     def start(self):
         self._thread.start()
@@ -153,10 +153,10 @@ class PlejdModule:
         self._loop.call_soon_threadsafe(self._loop.stop)
 
     async def _send(self, dim: int | None):
-        self._on_busy(True)
+        self.is_busy = True
         try:
             await self._conn.send(self._address, dim)
         except Exception as e:
             print(f"Plejd error: {e}", flush=True)
         finally:
-            self._on_busy(False)
+            self.is_busy = False

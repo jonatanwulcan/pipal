@@ -10,13 +10,13 @@ VOLUME = 20
 
 
 class SonosModule:
-    def __init__(self, on_busy, speaker_name: str = SPEAKER_NAME, volume: int = VOLUME):
+    def __init__(self, speaker_name: str = SPEAKER_NAME, volume: int = VOLUME):
         self._speaker_name = speaker_name
         self._volume = volume
-        self._on_busy = on_busy
         self._queue = queue.SimpleQueue()
         self._cancel = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
+        self.is_busy = False
 
     def start(self):
         self._thread.start()
@@ -43,13 +43,13 @@ class SonosModule:
                     return
 
             self._cancel.clear()
-            self._on_busy(True)
+            self.is_busy = True
             try:
                 self._play(url)
             except Exception as e:
                 print(f"Sonos error: {e}", flush=True)
             finally:
-                self._on_busy(False)
+                self.is_busy = False
 
     def _play(self, url: str):
         speakers = soco.discover(timeout=2)
