@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 import threading
+import traceback
 
 import aiohttp
 from bleak import BleakClient, BleakScanner
@@ -77,59 +78,90 @@ class PlejdConnection:
         self._gw_mac = None
 
     async def _connect(self):
-        if not self._cryptokey:
-            print("Plejd: fetching cryptokey from cloud", flush=True)
-            self._cryptokey = await _fetch_cryptokey(self._username, self._password, self._site_id)
+        while True:
+            try:
+                if not self._cryptokey:
+                    print("Plejd: fetching cryptokey from cloud", flush=True)
+                    self._cryptokey = await _fetch_cryptokey(self._username, self._password, self._site_id)
 
-        print("Plejd: scanning for mesh nodes", flush=True)
-        devices = await BleakScanner.discover(timeout=2.0, service_uuids=[SERVICE], return_adv=True)
-        if not devices:
-            raise RuntimeError("no mesh nodes found during BLE scan")
+                print("Plejd: scanning for mesh nodes", flush=True)
+                devices = await BleakScanner.discover(timeout=2.0, service_uuids=[SERVICE], return_adv=True)
+                if not devices:
+                    raise RuntimeError("no mesh nodes found during BLE scan")
 
-        for dev, adv in devices.values():
-            print(f"Plejd: found node {dev.address} (RSSI {adv.rssi})", flush=True)
+                for dev, adv in devices.values():
+                    print(f"Plejd: found node {dev.address} (RSSI {adv.rssi})", flush=True)
 
-        best_device, best_adv = max(devices.values(), key=lambda x: x[1].rssi)
-        print(f"Plejd: connecting to {best_device.address} (RSSI {best_adv.rssi})", flush=True)
+                best_device, best_adv = max(devices.values(), key=lambda x: x[1].rssi)
+                print(f"Plejd: connecting to {best_device.address} (RSSI {best_adv.rssi})", flush=True)
 
-        client = BleakClient(best_device, disconnected_callback=self._on_disconnect)
-        await client.connect()
+                client = BleakClient(best_device, disconnected_callback=self._on_disconnect)
+                await client.connect()
 
-        print("Plejd: authenticating", flush=True)
-        await client.write_gatt_char(_AUTH, b"\x00", response=True)
-        challenge = bytes(await client.read_gatt_char(_AUTH))
-        await client.write_gatt_char(_AUTH, _auth_response(self._cryptokey, challenge), response=True)
+                print("Plejd: authenticating", flush=True)
+                await client.write_gatt_char(_AUTH, b"\x00", response=True)
+                challenge = bytes(await client.read_gatt_char(_AUTH))
+                await client.write_gatt_char(_AUTH, _auth_response(self._cryptokey, challenge), response=True)
 
-        ping = bytes([os.urandom(1)[0]])
-        await client.write_gatt_char(_PING, ping, response=True)
-        pong = bytes(await client.read_gatt_char(_PING))
-        if (ping[0] + 1) & 0xFF != pong[0]:
-            await client.disconnect()
-            raise RuntimeError("authentication failed (bad ping/pong)")
+                ping = bytes([os.urandom(1)[0]])
+                await client.write_gatt_char(_PING, ping, response=True)
+                pong = bytes(await client.read_gatt_char(_PING))
+                if (ping[0] + 1) & 0xFF != pong[0]:
+                    await client.disconnect()
+                    raise RuntimeError("authentication failed (bad ping/pong)")
 
-        self._gw_mac = best_device.address
-        self._client = client
-        print("Plejd: connected to mesh", flush=True)
+                self._gw_mac = best_device.address
+                self._client = client
+                print("Plejd: connected to mesh", flush=True)
+                return
+            except RuntimeError as e:
+                print(f"Plejd: connect failed ({e}), retrying in 5s", flush=True)
+                await asyncio.sleep(5)
+            except Exception as e:
+                print(f"Plejd: connect failed ({e}), retrying in 5s\n{traceback.format_exc()}", flush=True)
+                await asyncio.sleep(5)
 
     async def warmup(self):
         lock = await self._get_lock()
         async with lock:
-            try:
-                await self._connect()
-            except Exception as e:
-                print(f"Plejd: startup connect failed: {e}", flush=True)
+            await self._connect()
 
     async def send(self, address: int, dim: int | None):
         lock = await self._get_lock()
         async with lock:
-            if self._client is None:
-                print("Plejd: not connected, reconnecting", flush=True)
-                await self._connect()
+            if self._client is None or self._gw_mac is None:
+                raise RuntimeError("not connected")
             action = f"dim={dim}" if dim is not None else "off"
             print(f"Plejd: sending {action} to address {address}", flush=True)
             cmd = _build_command(address, dim)
             encrypted = _encrypt_decrypt(self._cryptokey, self._gw_mac, cmd)
             await self._client.write_gatt_char(_DATA, encrypted, response=True)
+
+    async def _health_check_loop(self):
+        while True:
+            await asyncio.sleep(60)
+            lock = await self._get_lock()
+            async with lock:
+                if self._client is None or self._gw_mac is None:
+                    print("Plejd: health check: not connected, reconnecting", flush=True)
+                    await self._connect()
+                    continue
+                try:
+                    ping = bytes([os.urandom(1)[0]])
+                    await self._client.write_gatt_char(_PING, ping, response=True)
+                    pong = bytes(await self._client.read_gatt_char(_PING))
+                    if (ping[0] + 1) & 0xFF != pong[0]:
+                        raise RuntimeError("bad ping/pong")
+                except RuntimeError as e:
+                    print(f"Plejd: health check failed ({e}), reconnecting", flush=True)
+                    self._client = None
+                    self._gw_mac = None
+                    await self._connect()
+                except Exception as e:
+                    print(f"Plejd: health check failed ({e}), reconnecting\n{traceback.format_exc()}", flush=True)
+                    self._client = None
+                    self._gw_mac = None
+                    await self._connect()
 
     async def close(self):
         if self._client:
@@ -154,6 +186,7 @@ class PlejdModule:
     def start(self):
         self._thread.start()
         asyncio.run_coroutine_threadsafe(self._conn.warmup(), self._loop)
+        asyncio.run_coroutine_threadsafe(self._conn._health_check_loop(), self._loop)
 
     def put(self, dim: int | None):
         asyncio.run_coroutine_threadsafe(self._send(dim), self._loop)
@@ -164,9 +197,12 @@ class PlejdModule:
 
     async def _send(self, dim: int | None):
         self.is_busy = True
+        action = f"dim={dim}" if dim is not None else "off"
         try:
             await self._conn.send(self._address, dim)
+        except RuntimeError as e:
+            print(f"Plejd: dropped command ({action}): {e}", flush=True)
         except Exception as e:
-            print(f"Plejd error: {e}", flush=True)
+            print(f"Plejd: error sending command ({action}): {e}\n{traceback.format_exc()}", flush=True)
         finally:
             self.is_busy = False
