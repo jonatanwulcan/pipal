@@ -2,3 +2,8 @@ plejd_credentials.json
 venv/
 __pycache__/
 *.pyc
+
+# Terraform
+terraform/.terraform/
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
