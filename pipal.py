@@ -39,19 +39,19 @@ KEY_MAP = {
     ecodes.KEY_LEFTBRACE:  {"action": "sonos", "track": "https://open.spotify.com/track/1bBgHQoZCJ5FzkxrkL1PQ9"},  # å
     ecodes.KEY_APOSTROPHE: {"action": "sonos", "track": "https://open.spotify.com/track/72ylSapVzIEe8QH4gssLwF"},  # ä
     ecodes.KEY_SEMICOLON:  {"action": "sonos", "track": "https://open.spotify.com/track/29fNIVCogo4jpvKgTtIwyb"},  # ö
-    ecodes.KEY_F1:  {"action": "plejd", "on": True, "dim": 21},
-    ecodes.KEY_F2:  {"action": "plejd", "on": True, "dim": 42},
-    ecodes.KEY_F3:  {"action": "plejd", "on": True, "dim": 63},
-    ecodes.KEY_F4:  {"action": "plejd", "on": True, "dim": 85},
-    ecodes.KEY_F5:  {"action": "plejd", "on": True, "dim": 106},
-    ecodes.KEY_F6:  {"action": "plejd", "on": True, "dim": 127},
-    ecodes.KEY_F7:  {"action": "plejd", "on": True, "dim": 148},
-    ecodes.KEY_F8:  {"action": "plejd", "on": True, "dim": 170},
-    ecodes.KEY_F9:  {"action": "plejd", "on": True, "dim": 191},
-    ecodes.KEY_F10: {"action": "plejd", "on": True, "dim": 212},
-    ecodes.KEY_F11: {"action": "plejd", "on": True, "dim": 233},
-    ecodes.KEY_F12: {"action": "plejd", "on": True, "dim": 255},
-    ecodes.KEY_ESC: {"action": "plejd", "on": False},
+    ecodes.KEY_F1:  {"action": "plejd", "dim": 21},
+    ecodes.KEY_F2:  {"action": "plejd", "dim": 42},
+    ecodes.KEY_F3:  {"action": "plejd", "dim": 63},
+    ecodes.KEY_F4:  {"action": "plejd", "dim": 85},
+    ecodes.KEY_F5:  {"action": "plejd", "dim": 106},
+    ecodes.KEY_F6:  {"action": "plejd", "dim": 127},
+    ecodes.KEY_F7:  {"action": "plejd", "dim": 148},
+    ecodes.KEY_F8:  {"action": "plejd", "dim": 170},
+    ecodes.KEY_F9:  {"action": "plejd", "dim": 191},
+    ecodes.KEY_F10: {"action": "plejd", "dim": 212},
+    ecodes.KEY_F11: {"action": "plejd", "dim": 233},
+    ecodes.KEY_F12: {"action": "plejd", "dim": 255},
+    ecodes.KEY_ESC: {"action": "plejd", "dim": None},
 }
 
 
@@ -129,7 +129,7 @@ def main():
             if binding["action"] == "sonos":
                 sonos_module.put(binding["track"])
             elif binding["action"] == "plejd":
-                plejd_module.put(binding["dim"] if binding["on"] else None)
+                plejd_module.put(binding["dim"])
 
     finally:
         sonos_module.stop()
