@@ -1,5 +1,7 @@
+import asyncio
 import hashlib
 import os
+import threading
 
 import aiohttp
 from bleak import BleakClient, BleakScanner
@@ -64,7 +66,6 @@ class PlejdConnection:
         self._lock      = None
 
     async def _get_lock(self):
-        import asyncio
         if self._lock is None:
             self._lock = asyncio.Lock()
         return self._lock
@@ -123,3 +124,32 @@ class PlejdConnection:
         if self._client:
             await self._client.disconnect()
             self._client = None
+
+
+class PlejdModule:
+    def __init__(self, username: str, password: str, site_id: str, address: int, on_busy):
+        self._address  = address
+        self._on_busy  = on_busy
+        self._conn     = PlejdConnection(username, password, site_id)
+        self._loop     = asyncio.new_event_loop()
+        self._thread   = threading.Thread(target=self._loop.run_forever, daemon=True)
+
+    def start(self):
+        self._thread.start()
+        asyncio.run_coroutine_threadsafe(self._conn.warmup(), self._loop)
+
+    def put(self, dim: int | None):
+        asyncio.run_coroutine_threadsafe(self._send(dim), self._loop)
+
+    def stop(self):
+        asyncio.run_coroutine_threadsafe(self._conn.close(), self._loop).result(timeout=5)
+        self._loop.call_soon_threadsafe(self._loop.stop)
+
+    async def _send(self, dim: int | None):
+        self._on_busy(True)
+        try:
+            await self._conn.send(self._address, dim)
+        except Exception as e:
+            print(f"Plejd error: {e}", flush=True)
+        finally:
+            self._on_busy(False)

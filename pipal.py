@@ -1,4 +1,3 @@
-import asyncio
 import json
 import os
 import select
@@ -8,13 +7,12 @@ import time
 
 import evdev
 from evdev import InputDevice, ecodes
-import soco
-from soco.plugins.sharelink import ShareLinkPlugin
+
 import plejd
+import sonos
 
 SPEAKER_NAME = "Dags Room"
 VOLUME = 20
-
 PLEJD_ADDRESS = 18  # Skrivbord
 CREDENTIALS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plejd_credentials.json")
 
@@ -32,7 +30,6 @@ _f_keys = [
     ecodes.KEY_F5, ecodes.KEY_F6, ecodes.KEY_F7, ecodes.KEY_F8,
     ecodes.KEY_F9, ecodes.KEY_F10, ecodes.KEY_F11, ecodes.KEY_F12,
 ]
-# F1 = dimmest (~21), F12 = full brightness (255); ESC = off (None)
 PLEJD_KEY_MAP = {key: int(255 * (i + 1) / 12) for i, key in enumerate(_f_keys)}
 PLEJD_KEY_MAP[ecodes.KEY_ESC] = None
 
@@ -84,55 +81,6 @@ def animate_leds(keyboard, stop_event):
         time.sleep(0.2)
 
 
-def play_track(keyboard, track_url, cancel):
-    stop_anim = threading.Event()
-    anim = threading.Thread(target=animate_leds, args=(keyboard, stop_anim), daemon=True)
-    anim.start()
-
-    try:
-        speakers = soco.discover(timeout=2)
-        if cancel.is_set():
-            return
-
-        speaker = next((s for s in (speakers or []) if s.player_name == SPEAKER_NAME), None)
-        if not speaker:
-            print(f"Speaker '{SPEAKER_NAME}' not found", flush=True)
-            return
-        if cancel.is_set():
-            return
-
-        speaker.unjoin()
-        if cancel.is_set():
-            return
-
-        speaker.volume = VOLUME
-        if cancel.is_set():
-            return
-
-        share_link = ShareLinkPlugin(speaker)
-        speaker.clear_queue()
-        queue_position = share_link.add_share_link_to_queue(track_url)
-        speaker.play_from_queue(queue_position - 1)
-
-        stop_anim.set()
-        anim.join()
-        set_leds(keyboard, 1)
-
-        while not cancel.is_set():
-            state = speaker.get_current_transport_info()['current_transport_state']
-            if state not in ('PLAYING', 'TRANSITIONING'):
-                break
-            time.sleep(1)
-
-    except Exception as e:
-        print(f"Error: {e}", flush=True)
-    finally:
-        stop_anim.set()
-        anim.join()
-        set_leds(keyboard, 0)
-
-
-
 def drain_latest_key(keyboard, initial_code):
     latest = initial_code
     while True:
@@ -166,16 +114,34 @@ def main():
     keyboard.grab()
 
     with open(CREDENTIALS_FILE) as f:
-        plejd_creds = json.load(f)
+        creds = json.load(f)
 
-    plejd_conn = plejd.PlejdConnection(plejd_creds["username"], plejd_creds["password"], plejd_creds["siteId"])
-    plejd_loop = asyncio.new_event_loop()
-    plejd_loop_thread = threading.Thread(target=plejd_loop.run_forever, daemon=True)
-    plejd_loop_thread.start()
-    asyncio.run_coroutine_threadsafe(plejd_conn.warmup(), plejd_loop)
+    busy_modules = set()
+    busy_lock = threading.Lock()
+    blink_stop = threading.Event()
+    blink_thread = None
 
-    sonos_cancel = threading.Event()
-    sonos_thread = None
+    def on_busy(name, is_busy):
+        nonlocal blink_thread
+        with busy_lock:
+            if is_busy:
+                busy_modules.add(name)
+            else:
+                busy_modules.discard(name)
+            if busy_modules:
+                if blink_thread is None or not blink_thread.is_alive():
+                    blink_stop.clear()
+                    blink_thread = threading.Thread(target=animate_leds, args=(keyboard, blink_stop), daemon=True)
+                    blink_thread.start()
+            else:
+                blink_stop.set()
+                set_leds(keyboard, 0)
+
+    sonos_module = sonos.SonosModule(SPEAKER_NAME, VOLUME, lambda busy: on_busy('sonos', busy))
+    plejd_module = plejd.PlejdModule(creds["username"], creds["password"], creds["siteId"], PLEJD_ADDRESS, lambda busy: on_busy('plejd', busy))
+
+    sonos_module.start()
+    plejd_module.start()
 
     try:
         for event in keyboard.read_loop():
@@ -185,34 +151,20 @@ def main():
             code = event.code
 
             if code in PLEJD_KEY_MAP:
-                dim = PLEJD_KEY_MAP[code]
-                asyncio.run_coroutine_threadsafe(plejd_conn.send(PLEJD_ADDRESS, dim), plejd_loop)
+                plejd_module.put(PLEJD_KEY_MAP[code])
 
             elif code in KEY_MAP:
                 code = drain_latest_key(keyboard, code)
-                letter = KEY_MAP[code]
-                track_url = TRACKS.get(letter)
-                if not track_url:
-                    continue
-
-                sonos_cancel.set()
-                if sonos_thread and sonos_thread.is_alive():
-                    sonos_thread.join()
-
-                sonos_cancel = threading.Event()
-                sonos_thread = threading.Thread(
-                    target=play_track,
-                    args=(keyboard, track_url, sonos_cancel),
-                    daemon=True,
-                )
-                sonos_thread.start()
+                url = TRACKS.get(KEY_MAP[code])
+                if url:
+                    sonos_module.put(url)
 
     finally:
-        sonos_cancel.set()
-        if sonos_thread and sonos_thread.is_alive():
-            sonos_thread.join()
-        asyncio.run_coroutine_threadsafe(plejd_conn.close(), plejd_loop).result(timeout=5)
-        plejd_loop.call_soon_threadsafe(plejd_loop.stop)
+        sonos_module.stop()
+        plejd_module.stop()
+        blink_stop.set()
+        if blink_thread and blink_thread.is_alive():
+            blink_thread.join()
         keyboard.ungrab()
         set_leds(keyboard, 0)
 

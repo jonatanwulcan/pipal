@@ -14,6 +14,7 @@ ssh "$HOST" "mkdir -p $REMOTE_DIR/systemd"
 
 scp pipal.py "$HOST:$REMOTE_DIR/pipal.py"
 scp plejd.py "$HOST:$REMOTE_DIR/plejd.py"
+scp sonos.py "$HOST:$REMOTE_DIR/sonos.py"
 scp "$SERVICE_FILE" "$HOST:$REMOTE_DIR/$SERVICE_FILE"
 scp requirements.txt "$HOST:$REMOTE_DIR/requirements.txt"
 scp plejd_credentials.json "$HOST:$REMOTE_DIR/plejd_credentials.json"
