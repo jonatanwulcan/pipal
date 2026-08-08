@@ -52,6 +52,7 @@ class SonosModule:
                 self.is_busy = False
 
     def _play(self, url: str):
+        print(f"Sonos: discovering speakers", flush=True)
         speakers = soco.discover(timeout=2)
         if self._cancel.is_set():
             return
@@ -63,6 +64,7 @@ class SonosModule:
         if self._cancel.is_set():
             return
 
+        print(f"Sonos: playing {url}", flush=True)
         speaker.unjoin()
         if self._cancel.is_set():
             return
@@ -75,9 +77,11 @@ class SonosModule:
         speaker.clear_queue()
         pos = share_link.add_share_link_to_queue(url)
         speaker.play_from_queue(pos - 1)
+        print(f"Sonos: playback started", flush=True)
 
         while not self._cancel.is_set():
             state = speaker.get_current_transport_info()['current_transport_state']
             if state not in ('PLAYING', 'TRANSITIONING'):
+                print(f"Sonos: playback ended ({state})", flush=True)
                 break
             time.sleep(1)

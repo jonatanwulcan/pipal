@@ -78,17 +78,24 @@ class PlejdConnection:
 
     async def _connect(self):
         if not self._cryptokey:
+            print("Plejd: fetching cryptokey from cloud", flush=True)
             self._cryptokey = await _fetch_cryptokey(self._username, self._password, self._site_id)
 
+        print("Plejd: scanning for mesh nodes", flush=True)
         devices = await BleakScanner.discover(timeout=2.0, service_uuids=[SERVICE], return_adv=True)
         if not devices:
-            raise RuntimeError("No Plejd mesh devices found")
+            raise RuntimeError("no mesh nodes found during BLE scan")
 
-        best_device, _ = max(devices.values(), key=lambda x: x[1].rssi)
+        for dev, adv in devices.values():
+            print(f"Plejd: found node {dev.address} (RSSI {adv.rssi})", flush=True)
+
+        best_device, best_adv = max(devices.values(), key=lambda x: x[1].rssi)
+        print(f"Plejd: connecting to {best_device.address} (RSSI {best_adv.rssi})", flush=True)
 
         client = BleakClient(best_device, disconnected_callback=self._on_disconnect)
         await client.connect()
 
+        print("Plejd: authenticating", flush=True)
         await client.write_gatt_char(_AUTH, b"\x00", response=True)
         challenge = bytes(await client.read_gatt_char(_AUTH))
         await client.write_gatt_char(_AUTH, _auth_response(self._cryptokey, challenge), response=True)
@@ -98,7 +105,7 @@ class PlejdConnection:
         pong = bytes(await client.read_gatt_char(_PING))
         if (ping[0] + 1) & 0xFF != pong[0]:
             await client.disconnect()
-            raise RuntimeError("Plejd authentication failed")
+            raise RuntimeError("authentication failed (bad ping/pong)")
 
         self._gw_mac = best_device.address
         self._client = client
@@ -116,7 +123,10 @@ class PlejdConnection:
         lock = await self._get_lock()
         async with lock:
             if self._client is None:
+                print("Plejd: not connected, reconnecting", flush=True)
                 await self._connect()
+            action = f"dim={dim}" if dim is not None else "off"
+            print(f"Plejd: sending {action} to address {address}", flush=True)
             cmd = _build_command(address, dim)
             encrypted = _encrypt_decrypt(self._cryptokey, self._gw_mac, cmd)
             await self._client.write_gatt_char(_DATA, encrypted, response=True)
