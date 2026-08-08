@@ -5,9 +5,12 @@ import time
 import soco
 from soco.plugins.sharelink import ShareLinkPlugin
 
+SPEAKER_NAME = "Dags Room"
+VOLUME = 20
+
 
 class SonosModule:
-    def __init__(self, speaker_name: str, volume: int, on_busy):
+    def __init__(self, on_busy, speaker_name: str = SPEAKER_NAME, volume: int = VOLUME):
         self._speaker_name = speaker_name
         self._volume = volume
         self._on_busy = on_busy

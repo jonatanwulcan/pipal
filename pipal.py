@@ -11,8 +11,6 @@ from evdev import InputDevice, ecodes
 import plejd
 import sonos
 
-SPEAKER_NAME = "Dags Room"
-VOLUME = 20
 PLEJD_ADDRESS = 18  # Skrivbord
 CREDENTIALS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plejd_credentials.json")
 
@@ -137,7 +135,7 @@ def main():
                 blink_stop.set()
                 set_leds(keyboard, 0)
 
-    sonos_module = sonos.SonosModule(SPEAKER_NAME, VOLUME, lambda busy: on_busy('sonos', busy))
+    sonos_module = sonos.SonosModule(lambda busy: on_busy('sonos', busy))
     plejd_module = plejd.PlejdModule(creds["username"], creds["password"], creds["siteId"], PLEJD_ADDRESS, lambda busy: on_busy('plejd', busy))
 
     sonos_module.start()
