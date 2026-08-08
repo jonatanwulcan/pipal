@@ -26,6 +26,17 @@ _CMD_STATE       = 0x0097
 _CMD_STATE_LEVEL = 0x0098
 
 
+async def _restart_bluetooth():
+    print("Plejd: restarting bluetooth service", flush=True)
+    proc = await asyncio.create_subprocess_exec(
+        "sudo", "systemctl", "restart", "bluetooth",
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+    await proc.wait()
+    print("Plejd: bluetooth service restarted", flush=True)
+
+
 def _encrypt_decrypt(key_hex: str, addr_hex: str, data: bytes) -> bytes:
     key  = bytes.fromhex(key_hex.replace("-", ""))
     addr = bytes.fromhex(addr_hex.replace(":", "").replace("-", ""))[::-1]
@@ -78,6 +89,7 @@ class PlejdConnection:
         self._gw_mac = None
 
     async def _connect(self):
+        bluetooth_restarted = False
         while True:
             try:
                 if not self._cryptokey:
@@ -87,6 +99,9 @@ class PlejdConnection:
                 print("Plejd: scanning for mesh nodes", flush=True)
                 devices = await BleakScanner.discover(timeout=2.0, service_uuids=[SERVICE], return_adv=True)
                 if not devices:
+                    if not bluetooth_restarted:
+                        await _restart_bluetooth()
+                        bluetooth_restarted = True
                     raise RuntimeError("no mesh nodes found during BLE scan")
 
                 for dev, adv in devices.values():
