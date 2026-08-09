@@ -44,6 +44,11 @@ data "google_firebase_web_app_config" "default" {
   web_app_id = google_firebase_web_app.default.app_id
 }
 
+resource "google_project_service" "secret_manager" {
+  service            = "secretmanager.googleapis.com"
+  disable_on_destroy = false
+}
+
 resource "google_project_service" "firestore" {
   service            = "firestore.googleapis.com"
   disable_on_destroy = false
