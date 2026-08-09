@@ -44,19 +44,6 @@ def get_token():
     return _token
 
 
-@app.route("/api/debug")
-def debug():
-    token = get_token()
-    no_auth = http.get("https://api.spotify.com/v1/markets")
-    with_auth = http.get("https://api.spotify.com/v1/markets", headers={"Authorization": f"Bearer {token}"})
-    return jsonify({
-        "token_prefix": token[:10],
-        "no_auth_status": no_auth.status_code,
-        "with_auth_status": with_auth.status_code,
-        "with_auth_body": with_auth.text[:300],
-    })
-
-
 def fetch_one(token, track_id):
     resp = http.get(
         f"https://api.spotify.com/v1/tracks/{track_id}",
@@ -66,10 +53,7 @@ def fetch_one(token, track_id):
         app.logger.error("Spotify track %s error %s: %s", track_id, resp.status_code, resp.text)
         return None
     track = resp.json()
-    return (track["id"], {
-        "name": track["name"],
-        "artists": ", ".join(a["name"] for a in track["artists"]),
-    })
+    return (track["id"], {"name": track["name"]})
 
 
 @app.route("/api/tracks")
