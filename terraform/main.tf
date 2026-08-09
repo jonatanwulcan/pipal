@@ -49,6 +49,41 @@ resource "google_project_service" "secret_manager" {
   disable_on_destroy = false
 }
 
+resource "google_project_service" "run" {
+  service            = "run.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "artifact_registry" {
+  service            = "artifactregistry.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "cloud_build" {
+  service            = "cloudbuild.googleapis.com"
+  disable_on_destroy = false
+}
+
+resource "google_service_account" "spotify_runner" {
+  project      = var.project_id
+  account_id   = "spotify-runner"
+  display_name = "Spotify Cloud Run"
+}
+
+resource "google_secret_manager_secret_iam_member" "spotify_runner_client_id" {
+  project   = var.project_id
+  secret_id = "spotify-client-id"
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.spotify_runner.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "spotify_runner_client_secret" {
+  project   = var.project_id
+  secret_id = "spotify-client-secret"
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.spotify_runner.email}"
+}
+
 resource "google_project_service" "firestore" {
   service            = "firestore.googleapis.com"
   disable_on_destroy = false
