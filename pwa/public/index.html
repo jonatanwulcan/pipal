@@ -325,7 +325,10 @@
       const missing = trackIds.filter(id => id && !trackInfo[id]);
       if (!missing.length) return;
       try {
-        const resp = await fetch(`/api/tracks?ids=${missing.join(',')}`);
+        const idToken = await auth.currentUser.getIdToken();
+        const resp = await fetch(`/api/tracks?ids=${missing.join(',')}`, {
+          headers: { 'Authorization': `Bearer ${idToken}` },
+        });
         const data = await resp.json();
         Object.assign(trackInfo, data);
       } catch (e) {

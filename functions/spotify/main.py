@@ -3,13 +3,31 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from flask import Flask, request, jsonify
 from google.cloud import secretmanager
+import firebase_admin
+from firebase_admin import auth as firebase_auth
 import requests as http
 
 app = Flask(__name__)
+firebase_admin.initialize_app()
+
+ALLOWED_EMAILS = {'jonatan.wulcan@gmail.com', 'karin.wulcan@gmail.com'}
 
 _credentials = None
 _token = None
 _token_expiry = 0
+
+
+def verify_firebase_token():
+    auth_header = request.headers.get('Authorization', '')
+    if not auth_header.startswith('Bearer '):
+        return False
+    id_token = auth_header[7:]
+    try:
+        decoded = firebase_auth.verify_id_token(id_token)
+        return decoded.get('email') in ALLOWED_EMAILS
+    except Exception as e:
+        app.logger.warning('Token verification failed: %s', e)
+        return False
 
 
 def get_credentials():
@@ -58,6 +76,9 @@ def fetch_one(token, track_id):
 
 @app.route("/api/tracks")
 def tracks():
+    if not verify_firebase_token():
+        return jsonify({}), 401
+
     ids = [i.strip() for i in request.args.get("ids", "").split(",") if i.strip()]
     if not ids:
         return jsonify({})
