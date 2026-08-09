@@ -3,6 +3,9 @@
     "site": "pipal-app",
     "public": "public",
     "ignore": ["firebase.json", "**/.*"],
-    "rewrites": [{ "source": "**", "destination": "/index.html" }]
+    "rewrites": [
+      { "source": "/api/**", "run": { "serviceId": "spotify", "region": "europe-north1" } },
+      { "source": "**", "destination": "/index.html" }
+    ]
   }
 }
