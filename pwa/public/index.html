@@ -270,7 +270,7 @@
 
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js';
-    import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut }
+    import { getAuth, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut }
       from 'https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js';
     import { getFirestore, doc, onSnapshot, updateDoc, serverTimestamp }
       from 'https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js';
@@ -405,6 +405,8 @@
     } else {
       show('view-loading');
 
+      getRedirectResult(auth).catch(e => console.error('Redirect result error', e));
+
       onAuthStateChanged(auth, (user) => {
         if (configUnsub) { configUnsub(); configUnsub = null; }
         if (!user) {
@@ -420,9 +422,8 @@
         startConfigListener();
       });
 
-      document.getElementById('btn-signin').addEventListener('click', async () => {
-        try { await signInWithPopup(auth, provider); }
-        catch (e) { console.error('Sign in failed', e); }
+      document.getElementById('btn-signin').addEventListener('click', () => {
+        signInWithRedirect(auth, provider);
       });
 
       document.getElementById('btn-signout').addEventListener('click', () => signOut(auth));
