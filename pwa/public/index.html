@@ -252,7 +252,7 @@
       <div class="modal-title" id="modal-title"></div>
       <textarea id="modal-textarea" class="modal-textarea"
         autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-        placeholder="Paste Spotify link…"></textarea>
+        placeholder="Paste Spotify track or album link…"></textarea>
       <div class="modal-actions">
         <button class="modal-cancel-btn" id="modal-cancel">Cancel</button>
         <button class="modal-ok-btn" id="modal-ok">OK</button>
@@ -296,9 +296,9 @@
     provider.setCustomParameters({ prompt: 'select_account' });
     const configRef = doc(db, 'configuration', 'main');
 
-    // In-memory state: { A: { trackId, updatedAt: Date|null }, ... }
+    // In-memory state: { A: { trackId, albumId, updatedAt: Date|null }, ... }
     let keybindings = {};
-    let trackInfo = {}; // trackId -> { name, artists }
+    let itemInfo = {}; // trackId or albumId -> { name }
     let configUnsub = null;
 
     function show(id) {
@@ -306,33 +306,47 @@
       document.getElementById(id).hidden = false;
     }
 
-    function parseTrackId(input) {
-      const m = input.match(/open\.spotify\.com\/track\/([A-Za-z0-9]+)/);
-      if (m) return m[1];
-      if (/^[A-Za-z0-9]{22}$/.test(input.trim())) return input.trim();
+    function parseSpotifyLink(input) {
+      const trackMatch = input.match(/open\.spotify\.com\/track\/([A-Za-z0-9]+)/);
+      if (trackMatch) return { type: 'track', id: trackMatch[1] };
+      const albumMatch = input.match(/open\.spotify\.com\/album\/([A-Za-z0-9]+)/);
+      if (albumMatch) return { type: 'album', id: albumMatch[1] };
+      if (/^[A-Za-z0-9]{22}$/.test(input.trim())) return { type: 'track', id: input.trim() };
       return null;
     }
 
-    function trackLabel(key) {
-      const { trackId } = keybindings[key] ?? {};
-      if (!trackId) return '—';
-      const info = trackInfo[trackId];
+    function itemLabel(key) {
+      const { trackId, albumId } = keybindings[key] ?? {};
+      const id = trackId || albumId;
+      if (!id) return '—';
+      const info = itemInfo[id];
       if (!info) return '—';
       return info.name;
     }
 
-    async function fetchTrackInfo(trackIds) {
-      const missing = trackIds.filter(id => id && !trackInfo[id]);
-      if (!missing.length) return;
+    async function fetchItemInfo(trackIds, albumIds) {
+      const idToken = await auth.currentUser.getIdToken();
+      const fetches = [];
+      const missingTracks = trackIds.filter(id => id && !itemInfo[id]);
+      const missingAlbums = albumIds.filter(id => id && !itemInfo[id]);
+      if (missingTracks.length) {
+        fetches.push(
+          fetch(`/api/tracks?ids=${missingTracks.join(',')}`, {
+            headers: { 'Authorization': `Bearer ${idToken}` },
+          }).then(r => r.json()).then(data => Object.assign(itemInfo, data))
+        );
+      }
+      if (missingAlbums.length) {
+        fetches.push(
+          fetch(`/api/albums?ids=${missingAlbums.join(',')}`, {
+            headers: { 'Authorization': `Bearer ${idToken}` },
+          }).then(r => r.json()).then(data => Object.assign(itemInfo, data))
+        );
+      }
       try {
-        const idToken = await auth.currentUser.getIdToken();
-        const resp = await fetch(`/api/tracks?ids=${missing.join(',')}`, {
-          headers: { 'Authorization': `Bearer ${idToken}` },
-        });
-        const data = await resp.json();
-        Object.assign(trackInfo, data);
+        await Promise.all(fetches);
       } catch (e) {
-        console.error('Track lookup failed', e);
+        console.error('Item lookup failed', e);
       }
     }
 
@@ -347,7 +361,7 @@
 
       const meta = document.createElement('span');
       meta.className = 'config-meta';
-      meta.textContent = trackLabel(key);
+      meta.textContent = itemLabel(key);
 
       row.appendChild(keyEl);
       row.appendChild(meta);
@@ -387,10 +401,10 @@
       }
     }
 
-    function refreshTrackLabels() {
+    function refreshItemLabels() {
       for (const key of SONG_KEYS) {
         const row = document.querySelector(`[data-key="${key}"]`);
-        if (row) row.querySelector('.config-meta').textContent = trackLabel(key);
+        if (row) row.querySelector('.config-meta').textContent = itemLabel(key);
       }
     }
 
@@ -400,15 +414,16 @@
         const data = snap.exists() ? (snap.data().keybindings ?? {}) : {};
         for (const key of SONG_KEYS) {
           const v = data[key];
-          keybindings[key] = { trackId: v?.trackId ?? '', updatedAt: v?.updatedAt ?? null };
+          keybindings[key] = { trackId: v?.trackId ?? '', albumId: v?.albumId ?? '', updatedAt: v?.updatedAt ?? null };
         }
         const trackIds = SONG_KEYS.map(k => keybindings[k].trackId).filter(Boolean);
-        await fetchTrackInfo(trackIds);
+        const albumIds = SONG_KEYS.map(k => keybindings[k].albumId).filter(Boolean);
+        await fetchItemInfo(trackIds, albumIds);
         if (initialRender) {
           renderConfigList();
           initialRender = false;
         } else {
-          refreshTrackLabels();
+          refreshItemLabels();
         }
       }, (e) => console.error('Config listener error', e));
     }
@@ -448,20 +463,26 @@
         const key = editingKey;
         const ta = document.getElementById('modal-textarea');
         const okBtn = document.getElementById('modal-ok');
-        const trackId = parseTrackId(ta.value.trim());
-        if (!trackId) {
+        const parsed = parseSpotifyLink(ta.value.trim());
+        if (!parsed) {
           ta.classList.add('modal-textarea--error');
           return;
         }
         okBtn.disabled = true;
         try {
+          const firestoreData = parsed.type === 'track'
+            ? { trackId: parsed.id, albumId: '', updatedAt: serverTimestamp() }
+            : { albumId: parsed.id, trackId: '', updatedAt: serverTimestamp() };
           await updateDoc(configRef, {
-            [`keybindings.${key}`]: { trackId, updatedAt: serverTimestamp() },
+            [`keybindings.${key}`]: firestoreData,
           });
-          keybindings[key] = { trackId, updatedAt: new Date() };
-          await fetchTrackInfo([trackId]);
+          keybindings[key] = { trackId: firestoreData.trackId, albumId: firestoreData.albumId, updatedAt: new Date() };
+          await fetchItemInfo(
+            parsed.type === 'track' ? [parsed.id] : [],
+            parsed.type === 'album' ? [parsed.id] : [],
+          );
           const row = document.querySelector(`[data-key="${key}"]`);
-          if (row) row.querySelector('.config-meta').textContent = trackLabel(key);
+          if (row) row.querySelector('.config-meta').textContent = itemLabel(key);
           closeEditModal();
         } catch (e) {
           console.error('Failed to save', e);
