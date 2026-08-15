@@ -315,6 +315,18 @@
       return null;
     }
 
+    async function lookupName(parsed) {
+      const idToken = await auth.currentUser.getIdToken();
+      const endpoint = parsed.type === 'track' ? 'tracks' : 'albums';
+      const resp = await fetch(`/api/${endpoint}?ids=${parsed.id}`, {
+        headers: { 'Authorization': `Bearer ${idToken}` },
+      });
+      const data = await resp.json();
+      const name = data[parsed.id]?.name;
+      if (!name) throw new Error(`Name lookup failed for ${parsed.type} ${parsed.id}`);
+      return name;
+    }
+
     function itemLabel(key) {
       const { trackId, albumId } = keybindings[key] ?? {};
       const id = trackId || albumId;
@@ -470,17 +482,15 @@
         }
         okBtn.disabled = true;
         try {
+          const name = await lookupName(parsed);
           const firestoreData = parsed.type === 'track'
-            ? { trackId: parsed.id, albumId: '', updatedAt: serverTimestamp() }
-            : { albumId: parsed.id, trackId: '', updatedAt: serverTimestamp() };
+            ? { trackId: parsed.id, albumId: '', name, updatedAt: serverTimestamp() }
+            : { albumId: parsed.id, trackId: '', name, updatedAt: serverTimestamp() };
           await updateDoc(configRef, {
             [`keybindings.${key}`]: firestoreData,
           });
           keybindings[key] = { trackId: firestoreData.trackId, albumId: firestoreData.albumId, updatedAt: new Date() };
-          await fetchItemInfo(
-            parsed.type === 'track' ? [parsed.id] : [],
-            parsed.type === 'album' ? [parsed.id] : [],
-          );
+          itemInfo[parsed.id] = { name };
           const row = document.querySelector(`[data-key="${key}"]`);
           if (row) row.querySelector('.config-meta').textContent = itemLabel(key);
           closeEditModal();
