@@ -296,9 +296,8 @@
     provider.setCustomParameters({ prompt: 'select_account' });
     const configRef = doc(db, 'configuration', 'main');
 
-    // In-memory state: { A: { trackId, albumId, updatedAt: Date|null }, ... }
+    // In-memory state: { A: { trackId, albumId, name, updatedAt: Date|null }, ... }
     let keybindings = {};
-    let itemInfo = {}; // trackId or albumId -> { name }
     let configUnsub = null;
 
     function show(id) {
@@ -328,38 +327,7 @@
     }
 
     function itemLabel(key) {
-      const { trackId, albumId } = keybindings[key] ?? {};
-      const id = trackId || albumId;
-      if (!id) return '—';
-      const info = itemInfo[id];
-      if (!info) return '—';
-      return info.name;
-    }
-
-    async function fetchItemInfo(trackIds, albumIds) {
-      const idToken = await auth.currentUser.getIdToken();
-      const fetches = [];
-      const missingTracks = trackIds.filter(id => id && !itemInfo[id]);
-      const missingAlbums = albumIds.filter(id => id && !itemInfo[id]);
-      if (missingTracks.length) {
-        fetches.push(
-          fetch(`/api/tracks?ids=${missingTracks.join(',')}`, {
-            headers: { 'Authorization': `Bearer ${idToken}` },
-          }).then(r => r.json()).then(data => Object.assign(itemInfo, data))
-        );
-      }
-      if (missingAlbums.length) {
-        fetches.push(
-          fetch(`/api/albums?ids=${missingAlbums.join(',')}`, {
-            headers: { 'Authorization': `Bearer ${idToken}` },
-          }).then(r => r.json()).then(data => Object.assign(itemInfo, data))
-        );
-      }
-      try {
-        await Promise.all(fetches);
-      } catch (e) {
-        console.error('Item lookup failed', e);
-      }
+      return keybindings[key]?.name || '—';
     }
 
     function makeDisplayRow(key) {
@@ -422,15 +390,12 @@
 
     function startConfigListener() {
       let initialRender = true;
-      configUnsub = onSnapshot(configRef, async (snap) => {
+      configUnsub = onSnapshot(configRef, (snap) => {
         const data = snap.exists() ? (snap.data().keybindings ?? {}) : {};
         for (const key of SONG_KEYS) {
           const v = data[key];
-          keybindings[key] = { trackId: v?.trackId ?? '', albumId: v?.albumId ?? '', updatedAt: v?.updatedAt ?? null };
+          keybindings[key] = { trackId: v?.trackId ?? '', albumId: v?.albumId ?? '', name: v?.name ?? '', updatedAt: v?.updatedAt ?? null };
         }
-        const trackIds = SONG_KEYS.map(k => keybindings[k].trackId).filter(Boolean);
-        const albumIds = SONG_KEYS.map(k => keybindings[k].albumId).filter(Boolean);
-        await fetchItemInfo(trackIds, albumIds);
         if (initialRender) {
           renderConfigList();
           initialRender = false;
@@ -489,8 +454,7 @@
           await updateDoc(configRef, {
             [`keybindings.${key}`]: firestoreData,
           });
-          keybindings[key] = { trackId: firestoreData.trackId, albumId: firestoreData.albumId, updatedAt: new Date() };
-          itemInfo[parsed.id] = { name };
+          keybindings[key] = { trackId: firestoreData.trackId, albumId: firestoreData.albumId, name, updatedAt: new Date() };
           const row = document.querySelector(`[data-key="${key}"]`);
           if (row) row.querySelector('.config-meta').textContent = itemLabel(key);
           closeEditModal();
