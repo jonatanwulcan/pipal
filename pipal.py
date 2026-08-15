@@ -30,7 +30,7 @@ LETTER_TO_EVDEV = {
 
 # F1 is the lowest dim level (0, which is not off for Plejd) and F12 is full.
 # The gamma curve makes the perceived brightness steps feel linear.
-DIM_GAMMA = 2.2
+DIM_GAMMA = 1.8
 F_KEYS = [
     ecodes.KEY_F1, ecodes.KEY_F2, ecodes.KEY_F3, ecodes.KEY_F4,
     ecodes.KEY_F5, ecodes.KEY_F6, ecodes.KEY_F7, ecodes.KEY_F8,
