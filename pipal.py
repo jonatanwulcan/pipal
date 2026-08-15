@@ -1,3 +1,4 @@
+import random
 import threading
 import time
 
@@ -8,6 +9,7 @@ from google.cloud import firestore
 
 import plejd
 import sonos
+import stories
 
 ALL_LEDS = [ecodes.LED_NUML, ecodes.LED_CAPSL, ecodes.LED_SCROLLL]
 
@@ -43,7 +45,11 @@ PLEJD_ENTRIES = {
 }
 PLEJD_ENTRIES[ecodes.KEY_ESC] = {"action": "plejd", "dim": None}
 
-KEY_MAP = dict(PLEJD_ENTRIES)
+# Static bindings that are always present regardless of Firestore config.
+STATIC_ENTRIES = dict(PLEJD_ENTRIES)
+STATIC_ENTRIES[ecodes.KEY_SPACE] = {"action": "story"}
+
+KEY_MAP = dict(STATIC_ENTRIES)
 
 
 def _build_sonos_entries(keybindings):
@@ -71,7 +77,7 @@ def _on_config_snapshot(doc_snapshots, changes, read_time):
             keybindings = snap.get('keybindings') or {}
             sonos_entries = _build_sonos_entries(keybindings)
             old_map = KEY_MAP
-            new_map = dict(PLEJD_ENTRIES)
+            new_map = dict(STATIC_ENTRIES)
             new_map.update(sonos_entries)
             KEY_MAP = new_map
 
@@ -103,7 +109,7 @@ def load_keybindings():
     keybindings = snap.get('keybindings') or {}
     sonos_entries = _build_sonos_entries(keybindings)
     global KEY_MAP
-    KEY_MAP = dict(PLEJD_ENTRIES)
+    KEY_MAP = dict(STATIC_ENTRIES)
     KEY_MAP.update(sonos_entries)
 
     print(f"Firestore: loaded {len(sonos_entries)} song keys:", flush=True)
@@ -178,6 +184,13 @@ def main():
 
             if binding["action"] == "sonos":
                 sonos_module.put(binding["track"])
+            elif binding["action"] == "story":
+                story = random.choice(stories.STORIES)
+                print(f"Story: {story['title']}", flush=True)
+                sonos_module.put([
+                    f"https://open.spotify.com/track/{track_id}"
+                    for track_id in story["tracks"]
+                ])
             elif binding["action"] == "plejd":
                 plejd_module.put(binding["dim"])
 
