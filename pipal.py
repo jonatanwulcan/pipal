@@ -28,21 +28,20 @@ LETTER_TO_EVDEV = {
     'Ö': ecodes.KEY_SEMICOLON,
 }
 
+# F1 is the lowest dim level (0, which is not off for Plejd) and F12 is full.
+# The gamma curve makes the perceived brightness steps feel linear.
+DIM_GAMMA = 1.5
+F_KEYS = [
+    ecodes.KEY_F1, ecodes.KEY_F2, ecodes.KEY_F3, ecodes.KEY_F4,
+    ecodes.KEY_F5, ecodes.KEY_F6, ecodes.KEY_F7, ecodes.KEY_F8,
+    ecodes.KEY_F9, ecodes.KEY_F10, ecodes.KEY_F11, ecodes.KEY_F12,
+]
+
 PLEJD_ENTRIES = {
-    ecodes.KEY_F1:  {"action": "plejd", "dim": 21},
-    ecodes.KEY_F2:  {"action": "plejd", "dim": 42},
-    ecodes.KEY_F3:  {"action": "plejd", "dim": 63},
-    ecodes.KEY_F4:  {"action": "plejd", "dim": 85},
-    ecodes.KEY_F5:  {"action": "plejd", "dim": 106},
-    ecodes.KEY_F6:  {"action": "plejd", "dim": 127},
-    ecodes.KEY_F7:  {"action": "plejd", "dim": 148},
-    ecodes.KEY_F8:  {"action": "plejd", "dim": 170},
-    ecodes.KEY_F9:  {"action": "plejd", "dim": 191},
-    ecodes.KEY_F10: {"action": "plejd", "dim": 212},
-    ecodes.KEY_F11: {"action": "plejd", "dim": 233},
-    ecodes.KEY_F12: {"action": "plejd", "dim": 255},
-    ecodes.KEY_ESC: {"action": "plejd", "dim": None},
+    key: {"action": "plejd", "dim": round(255 * (i / (len(F_KEYS) - 1)) ** DIM_GAMMA)}
+    for i, key in enumerate(F_KEYS)
 }
+PLEJD_ENTRIES[ecodes.KEY_ESC] = {"action": "plejd", "dim": None}
 
 KEY_MAP = dict(PLEJD_ENTRIES)
 
