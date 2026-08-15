@@ -52,10 +52,12 @@ def _build_sonos_entries(keybindings):
     for letter, evdev_code in LETTER_TO_EVDEV.items():
         v = keybindings.get(letter)
         if v and v.get('trackId'):
-            entries[evdev_code] = {
-                "action": "sonos",
-                "track": f"https://open.spotify.com/track/{v['trackId']}",
-            }
+            url = f"https://open.spotify.com/track/{v['trackId']}"
+        elif v and v.get('albumId'):
+            url = f"https://open.spotify.com/album/{v['albumId']}"
+        else:
+            continue
+        entries[evdev_code] = {"action": "sonos", "track": url}
     return entries
 
 

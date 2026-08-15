@@ -3,6 +3,9 @@ venv/
 __pycache__/
 *.pyc
 
+# Firebase
+pwa/.firebase/
+
 # Terraform
 terraform/.terraform/
 terraform/terraform.tfstate

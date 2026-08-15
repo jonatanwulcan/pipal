@@ -74,6 +74,18 @@ def fetch_one(token, track_id):
     return (track["id"], {"name": track["name"]})
 
 
+def fetch_album(token, album_id):
+    resp = http.get(
+        f"https://api.spotify.com/v1/albums/{album_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    if not resp.ok:
+        app.logger.error("Spotify album %s error %s: %s", album_id, resp.status_code, resp.text)
+        return None
+    album = resp.json()
+    return (album["id"], {"name": album["name"]})
+
+
 @app.route("/api/tracks")
 def tracks():
     if not verify_firebase_token():
@@ -87,6 +99,26 @@ def tracks():
     result = {}
     with ThreadPoolExecutor(max_workers=10) as executor:
         futures = {executor.submit(fetch_one, token, tid): tid for tid in ids[:50]}
+        for future in as_completed(futures):
+            entry = future.result()
+            if entry:
+                result[entry[0]] = entry[1]
+    return jsonify(result)
+
+
+@app.route("/api/albums")
+def albums():
+    if not verify_firebase_token():
+        return jsonify({}), 401
+
+    ids = [i.strip() for i in request.args.get("ids", "").split(",") if i.strip()]
+    if not ids:
+        return jsonify({})
+
+    token = get_token()
+    result = {}
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {executor.submit(fetch_album, token, aid): aid for aid in ids[:50]}
         for future in as_completed(futures):
             entry = future.result()
             if entry:

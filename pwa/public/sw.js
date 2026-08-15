@@ -1,4 +1,4 @@
-const VERSION = 'v2.9';
+const VERSION = 'v2.10';
 const CACHE = `pipal-${VERSION}`;
 const ASSETS = ['/', '/manifest.json', '/icon.svg'];
 
