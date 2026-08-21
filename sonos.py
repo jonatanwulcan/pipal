@@ -21,9 +21,10 @@ class SonosModule:
     def start(self):
         self._thread.start()
 
-    def put(self, url: str):
+    def put(self, urls):
+        """Accepts a single share link URL or a list of URLs to play in order."""
         self._cancel.set()
-        self._queue.put(url)
+        self._queue.put(urls)
 
     def stop(self):
         self._cancel.set()
@@ -32,26 +33,28 @@ class SonosModule:
 
     def _run(self):
         while True:
-            url = self._queue.get()
-            if url is None:
+            urls = self._queue.get()
+            if urls is None:
                 return
 
             # If more items are already queued, skip to the latest
             while not self._queue.empty():
-                url = self._queue.get()
-                if url is None:
+                urls = self._queue.get()
+                if urls is None:
                     return
 
             self._cancel.clear()
             self.is_busy = True
             try:
-                self._play(url)
+                self._play(urls)
             except Exception as e:
                 print(f"Sonos error: {e}", flush=True)
             finally:
                 self.is_busy = False
 
-    def _play(self, url: str):
+    def _play(self, urls):
+        if isinstance(urls, str):
+            urls = [urls]
         print(f"Sonos: discovering speakers", flush=True)
         speakers = soco.discover(timeout=2)
         if self._cancel.is_set():
@@ -64,7 +67,7 @@ class SonosModule:
         if self._cancel.is_set():
             return
 
-        print(f"Sonos: playing {url}", flush=True)
+        print(f"Sonos: playing {', '.join(urls)}", flush=True)
         speaker.unjoin()
         if self._cancel.is_set():
             return
@@ -75,7 +78,16 @@ class SonosModule:
 
         share_link = ShareLinkPlugin(speaker)
         speaker.clear_queue()
-        pos = share_link.add_share_link_to_queue(url)
+        pos = None
+        for url in urls:
+            queued_at = share_link.add_share_link_to_queue(url)
+            if pos is None:
+                pos = queued_at
+            if self._cancel.is_set():
+                return
+
+        # Stop at the end of the queue instead of repeating or shuffling
+        speaker.play_mode = 'NORMAL'
         speaker.play_from_queue(pos - 1)
         print(f"Sonos: playback started", flush=True)
 
