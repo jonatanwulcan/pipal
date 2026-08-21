@@ -28,18 +28,18 @@ LETTER_TO_EVDEV = {
     'Ö': ecodes.KEY_SEMICOLON,
 }
 
-# F1 is the lowest dim level (0, which is not off for Plejd) and F12 is full.
+# 1 is the lowest dim level (0, which is not off for Plejd) and Backspace is full.
 # The gamma curve makes the perceived brightness steps feel linear.
 DIM_GAMMA = 1.5
-F_KEYS = [
-    ecodes.KEY_F1, ecodes.KEY_F2, ecodes.KEY_F3, ecodes.KEY_F4,
-    ecodes.KEY_F5, ecodes.KEY_F6, ecodes.KEY_F7, ecodes.KEY_F8,
-    ecodes.KEY_F9, ecodes.KEY_F10, ecodes.KEY_F11, ecodes.KEY_F12,
+DIM_KEYS = [
+    ecodes.KEY_1, ecodes.KEY_2, ecodes.KEY_3, ecodes.KEY_4, ecodes.KEY_5,
+    ecodes.KEY_6, ecodes.KEY_7, ecodes.KEY_8, ecodes.KEY_9, ecodes.KEY_0,
+    ecodes.KEY_MINUS, ecodes.KEY_EQUAL, ecodes.KEY_BACKSPACE,
 ]
 
 PLEJD_ENTRIES = {
-    key: {"action": "plejd", "dim": round(255 * (i / (len(F_KEYS) - 1)) ** DIM_GAMMA)}
-    for i, key in enumerate(F_KEYS)
+    key: {"action": "plejd", "dim": round(255 * (i / (len(DIM_KEYS) - 1)) ** DIM_GAMMA)}
+    for i, key in enumerate(DIM_KEYS)
 }
 PLEJD_ENTRIES[ecodes.KEY_ESC] = {"action": "plejd", "dim": None}
 
@@ -136,14 +136,25 @@ def manage_leds(keyboard, modules, stop_event):
 
 
 def find_keyboard():
+    """Some keyboards expose multiple HID interfaces that all advertise a full
+    key set (e.g. a boot-protocol interface plus a vendor "extended" one), but
+    only the boot-protocol interface actually emits key events and supports
+    LEDs. Prefer a device that also reports LED capability; fall back to any
+    key-capable match if none do.
+    """
+    candidates = []
     for path in evdev.list_devices():
         device = InputDevice(path)
         caps = device.capabilities()
         if ecodes.EV_KEY in caps:
             keys = caps[ecodes.EV_KEY]
             if ecodes.KEY_A in keys and ecodes.KEY_SPACE in keys:
-                return device
-    return None
+                candidates.append(device)
+
+    for device in candidates:
+        if ecodes.EV_LED in device.capabilities():
+            return device
+    return candidates[0] if candidates else None
 
 
 def main():
