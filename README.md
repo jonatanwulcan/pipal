@@ -16,7 +16,7 @@ Edit `plejd_credentials.json` with your Plejd account email, password, and site 
 
 ### FaceTime credentials
 
-The 6-key cluster above the arrow keys (Insert, Home, Page Up, Delete, End, Page Down) each send a trigger email to the iPad's own iCloud account. A Shortcuts personal automation on the iPad watches for a specific subject line and starts a FaceTime call. Each key maps to an opaque contact id (`contact_1`..`contact_6`, see `FACETIME_ENTRIES` in `pipal.py`); `facetime_credentials.json` maps each contact id to its subject line, keeping the physical keyboard layout and the FaceTime secrets independent of each other.
+The 6-key cluster above the arrow keys (Insert, Home, Page Up, Delete, End, Page Down) each send a trigger email to the iPad's own iCloud account. A Shortcuts personal automation on the iPad watches for a specific subject line and starts a FaceTime call. Each key maps to a contact name (see `FACETIME_ENTRIES` in `pipal.py`); `facetime_credentials.json` maps each contact name to its subject line, keeping the physical keyboard layout and the FaceTime secrets independent of each other.
 
 ```bash
 cp facetime_credentials.json.example facetime_credentials.json
@@ -24,7 +24,7 @@ cp facetime_credentials.json.example facetime_credentials.json
 
 Edit `facetime_credentials.json`:
 - `username` / `password`: the iPad's iCloud address and an app-specific password (generate one at [appleid.apple.com](https://appleid.apple.com), since iCloud SMTP won't accept the account's real password).
-- `contacts`: a high-entropy random subject per contact id, so only this device can trigger a call. Generate each with:
+- `contacts`: a high-entropy random subject per contact name, so only this device can trigger a call. Generate each with:
   ```bash
   python3 -c "import secrets; print(secrets.token_urlsafe(32))"
   ```

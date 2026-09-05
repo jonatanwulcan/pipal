@@ -12,7 +12,7 @@ CREDENTIALS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fac
 
 
 class FacetimeModule:
-    """Sends a trigger email to the iPad's own iCloud account. Each contact id
+    """Sends a trigger email to the iPad's own iCloud account. Each contact name
     maps to a high-entropy random subject line; a Shortcuts automation on the
     iPad matches on that subject to start a FaceTime call to the right person."""
 
@@ -29,8 +29,8 @@ class FacetimeModule:
     def start(self):
         self._thread.start()
 
-    def put(self, contact_id: str):
-        self._queue.put(contact_id)
+    def put(self, contact_name: str):
+        self._queue.put(contact_name)
 
     def stop(self):
         self._queue.put(None)
@@ -38,22 +38,22 @@ class FacetimeModule:
 
     def _run(self):
         while True:
-            contact_id = self._queue.get()
-            if contact_id is None:
+            contact_name = self._queue.get()
+            if contact_name is None:
                 return
 
             self.is_busy = True
             try:
-                self._send(contact_id)
+                self._send(contact_name)
             except Exception as e:
                 print(f"Facetime error: {e}", flush=True)
             finally:
                 self.is_busy = False
 
-    def _send(self, contact_id: str):
-        subject = self._contacts.get(contact_id)
+    def _send(self, contact_name: str):
+        subject = self._contacts.get(contact_name)
         if not subject:
-            print(f"Facetime: no trigger configured for contact '{contact_id}'", flush=True)
+            print(f"Facetime: no trigger configured for contact '{contact_name}'", flush=True)
             return
 
         msg = EmailMessage()
@@ -62,9 +62,9 @@ class FacetimeModule:
         msg["To"] = self._username
         msg.set_content("pipal trigger")
 
-        print(f"Facetime: sending trigger for '{contact_id}'", flush=True)
+        print(f"Facetime: sending trigger for '{contact_name}'", flush=True)
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as smtp:
             smtp.starttls()
             smtp.login(self._username, self._password)
             smtp.send_message(msg)
-        print(f"Facetime: trigger sent for '{contact_id}'", flush=True)
+        print(f"Facetime: trigger sent for '{contact_name}'", flush=True)
