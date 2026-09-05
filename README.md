@@ -14,6 +14,25 @@ cp plejd_credentials.json.example plejd_credentials.json
 
 Edit `plejd_credentials.json` with your Plejd account email, password, and site ID. The file is gitignored and will be copied to the Pi on deploy. Your site ID can be found in the Plejd app under Settings → Installation.
 
+### FaceTime credentials
+
+The 6-key cluster above the arrow keys (Insert, Home, Page Up, Delete, End, Page Down) each send a trigger email to the iPad's own iCloud account. A Shortcuts personal automation on the iPad watches for a specific subject line and starts a FaceTime call — see `facetime.py` for the key-to-subject mapping.
+
+```bash
+cp facetime_credentials.json.example facetime_credentials.json
+```
+
+Edit `facetime_credentials.json`:
+- `username` / `password`: the iPad's iCloud address and an app-specific password (generate one at [appleid.apple.com](https://appleid.apple.com), since iCloud SMTP won't accept the account's real password).
+- `keys`: a high-entropy random subject per key, so only this device can trigger a call. Generate each with:
+  ```bash
+  python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+  ```
+
+On the iPad, create one Shortcuts personal automation per key: trigger on "Email", filtered to the matching subject, with "Ask Before Running" turned off, running a shortcut that FaceTimes the intended family member.
+
+This file is gitignored and copied to the Pi on deploy.
+
 ## Deploy
 
 Run from the repo root:

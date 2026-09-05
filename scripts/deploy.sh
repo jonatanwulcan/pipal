@@ -16,9 +16,11 @@ scp pipal.py "$HOST:$REMOTE_DIR/pipal.py"
 scp plejd.py "$HOST:$REMOTE_DIR/plejd.py"
 scp sonos.py "$HOST:$REMOTE_DIR/sonos.py"
 scp stories.py "$HOST:$REMOTE_DIR/stories.py"
+scp facetime.py "$HOST:$REMOTE_DIR/facetime.py"
 scp "$SERVICE_FILE" "$HOST:$REMOTE_DIR/$SERVICE_FILE"
 scp requirements.txt "$HOST:$REMOTE_DIR/requirements.txt"
 scp plejd_credentials.json "$HOST:$REMOTE_DIR/plejd_credentials.json"
+scp facetime_credentials.json "$HOST:$REMOTE_DIR/facetime_credentials.json"
 
 ssh "$HOST" "sed -i 's|/home/pi/pipal|$REMOTE_DIR|g' $REMOTE_DIR/$SERVICE_FILE"
 

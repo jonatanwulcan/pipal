@@ -1,4 +1,5 @@
 plejd_credentials.json
+facetime_credentials.json
 venv/
 __pycache__/
 *.pyc

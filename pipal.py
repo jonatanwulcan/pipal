@@ -7,6 +7,7 @@ from evdev import InputDevice, ecodes
 from google.auth.credentials import AnonymousCredentials
 from google.cloud import firestore
 
+import facetime
 import plejd
 import sonos
 import stories
@@ -45,9 +46,21 @@ PLEJD_ENTRIES = {
 }
 PLEJD_ENTRIES[ecodes.KEY_ESC] = {"action": "plejd", "dim": None}
 
+# The 6-key cluster above the arrow keys, one per family member, each calling
+# out to a distinct Shortcuts automation on the iPad via facetime.py.
+FACETIME_ENTRIES = {
+    ecodes.KEY_INSERT: {"action": "facetime", "key": "INSERT"},
+    ecodes.KEY_HOME: {"action": "facetime", "key": "HOME"},
+    ecodes.KEY_PAGEUP: {"action": "facetime", "key": "PAGEUP"},
+    ecodes.KEY_DELETE: {"action": "facetime", "key": "DELETE"},
+    ecodes.KEY_END: {"action": "facetime", "key": "END"},
+    ecodes.KEY_PAGEDOWN: {"action": "facetime", "key": "PAGEDOWN"},
+}
+
 # Static bindings that are always present regardless of Firestore config.
 STATIC_ENTRIES = dict(PLEJD_ENTRIES)
 STATIC_ENTRIES[ecodes.KEY_SPACE] = {"action": "story"}
+STATIC_ENTRIES.update(FACETIME_ENTRIES)
 
 KEY_MAP = dict(STATIC_ENTRIES)
 
@@ -165,12 +178,14 @@ def main():
 
     sonos_module = sonos.SonosModule()
     plejd_module = plejd.PlejdModule()
+    facetime_module = facetime.FacetimeModule()
 
     sonos_module.start()
     plejd_module.start()
+    facetime_module.start()
 
     led_stop = threading.Event()
-    led_thread = threading.Thread(target=manage_leds, args=(keyboard, [sonos_module, plejd_module], led_stop), daemon=True)
+    led_thread = threading.Thread(target=manage_leds, args=(keyboard, [sonos_module, plejd_module, facetime_module], led_stop), daemon=True)
     led_thread.start()
 
     try:
@@ -193,12 +208,15 @@ def main():
                 ])
             elif binding["action"] == "plejd":
                 plejd_module.put(binding["dim"])
+            elif binding["action"] == "facetime":
+                facetime_module.put(binding["key"])
 
     finally:
         led_stop.set()
         led_thread.join(timeout=0.5)
         sonos_module.stop()
         plejd_module.stop()
+        facetime_module.stop()
         keyboard.ungrab()
         set_leds(keyboard, 0)
 
