@@ -8,6 +8,9 @@ from soco.plugins.sharelink import ShareLinkPlugin
 SPEAKER_NAME = "Dags Room"
 VOLUME = 20
 
+# Sentinel queued by stop_playback() to tell the worker to halt the speaker.
+_STOP = object()
+
 
 class SonosModule:
     def __init__(self, speaker_name: str = SPEAKER_NAME, volume: int = VOLUME):
@@ -26,6 +29,11 @@ class SonosModule:
         self._cancel.set()
         self._queue.put(urls)
 
+    def stop_playback(self):
+        """Halts whatever the speaker is currently playing."""
+        self._cancel.set()
+        self._queue.put(_STOP)
+
     def stop(self):
         self._cancel.set()
         self._queue.put(None)
@@ -33,24 +41,37 @@ class SonosModule:
 
     def _run(self):
         while True:
-            urls = self._queue.get()
-            if urls is None:
+            item = self._queue.get()
+            if item is None:
                 return
 
             # If more items are already queued, skip to the latest
             while not self._queue.empty():
-                urls = self._queue.get()
-                if urls is None:
+                item = self._queue.get()
+                if item is None:
                     return
 
             self._cancel.clear()
             self.is_busy = True
             try:
-                self._play(urls)
+                if item is _STOP:
+                    self._stop_playback()
+                else:
+                    self._play(item)
             except Exception as e:
                 print(f"Sonos error: {e}", flush=True)
             finally:
                 self.is_busy = False
+
+    def _stop_playback(self):
+        print("Sonos: discovering speakers", flush=True)
+        speakers = soco.discover(timeout=2)
+        speaker = next((s for s in (speakers or []) if s.player_name == self._speaker_name), None)
+        if not speaker:
+            print(f"Sonos: speaker '{self._speaker_name}' not found", flush=True)
+            return
+        print("Sonos: stopping playback", flush=True)
+        speaker.stop()
 
     def _play(self, urls):
         if isinstance(urls, str):
