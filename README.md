@@ -24,9 +24,9 @@ cp facetime_credentials.json.example facetime_credentials.json
 
 Edit `facetime_credentials.json`:
 - `username` / `password`: the iPad's iCloud address and an app-specific password (generate one at [appleid.apple.com](https://appleid.apple.com), since iCloud SMTP won't accept the account's real password).
-- `contacts`: a high-entropy random subject per contact name, so only this device can trigger a call. Generate each with:
+- `contacts`: a high-entropy random subject per contact name, so only this device can trigger a call. Lowercase-only keeps it easy to read back if you ever need to type it. Generate each with:
   ```bash
-  python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+  python3 -c "import secrets, string; print(''.join(secrets.choice(string.ascii_lowercase) for _ in range(24)))"
   ```
 
 On the iPad, create one Shortcuts personal automation per key: trigger on "Email", filtered to the matching subject, with "Ask Before Running" turned off, running a shortcut that FaceTimes the intended family member.
