@@ -40,26 +40,38 @@ F_KEYS = [
     ecodes.KEY_F9, ecodes.KEY_F10, ecodes.KEY_F11, ecodes.KEY_F12,
 ]
 
+# Every key binds to a list of actions, run in order — most just have one.
 PLEJD_ENTRIES = {
-    key: {"action": "plejd", "dim": round(255 * (i / (len(F_KEYS) - 1)) ** DIM_GAMMA)}
+    key: [{"action": "plejd", "dim": round(255 * (i / (len(F_KEYS) - 1)) ** DIM_GAMMA)}]
     for i, key in enumerate(F_KEYS)
 }
-PLEJD_ENTRIES[ecodes.KEY_ESC] = {"action": "plejd", "dim": None}
+PLEJD_ENTRIES[ecodes.KEY_ESC] = [{"action": "plejd", "dim": None}]
 
 # The 6-key cluster above the arrow keys, one per family member. Each contact
 # id is opaque to pipal.py; facetime.py maps it to a Shortcuts trigger.
+FACETIME_CONTACTS = {
+    ecodes.KEY_INSERT: "Farmor",
+    ecodes.KEY_HOME: "Farfar",
+    ecodes.KEY_PAGEUP: "Pappa",
+    ecodes.KEY_DELETE: "Mamma",
+    ecodes.KEY_END: "Farbror Elle",
+    ecodes.KEY_PAGEDOWN: "Faster Judit",
+}
+
+# Starting a FaceTime call also brings the desk lamp to full and stops any Sonos
+# playback so the room is quiet for the call.
 FACETIME_ENTRIES = {
-    ecodes.KEY_INSERT: {"action": "facetime", "contact": "Farmor"},
-    ecodes.KEY_HOME: {"action": "facetime", "contact": "Farfar"},
-    ecodes.KEY_PAGEUP: {"action": "facetime", "contact": "Pappa"},
-    ecodes.KEY_DELETE: {"action": "facetime", "contact": "Mamma"},
-    ecodes.KEY_END: {"action": "facetime", "contact": "Farbror Elle"},
-    ecodes.KEY_PAGEDOWN: {"action": "facetime", "contact": "Faster Judit"},
+    key: [
+        {"action": "facetime", "contact": contact},
+        {"action": "plejd", "dim": 255},
+        {"action": "sonos_stop"},
+    ]
+    for key, contact in FACETIME_CONTACTS.items()
 }
 
 # Static bindings that are always present regardless of Firestore config.
 STATIC_ENTRIES = dict(PLEJD_ENTRIES)
-STATIC_ENTRIES[ecodes.KEY_SPACE] = {"action": "story"}
+STATIC_ENTRIES[ecodes.KEY_SPACE] = [{"action": "story"}]
 STATIC_ENTRIES.update(FACETIME_ENTRIES)
 
 KEY_MAP = dict(STATIC_ENTRIES)
@@ -75,8 +87,16 @@ def _build_sonos_entries(keybindings):
             url = f"https://open.spotify.com/album/{v['albumId']}"
         else:
             continue
-        entries[evdev_code] = {"action": "sonos", "track": url}
+        entries[evdev_code] = [{"action": "sonos", "track": url}]
     return entries
+
+
+def _sonos_track(key_map, code):
+    """The Spotify URL bound to a key, or None if it has no sonos action."""
+    for step in key_map.get(code) or []:
+        if step["action"] == "sonos":
+            return step["track"]
+    return None
 
 
 def _on_config_snapshot(doc_snapshots, changes, read_time):
@@ -95,9 +115,9 @@ def _on_config_snapshot(doc_snapshots, changes, read_time):
             KEY_MAP = new_map
 
             changed = [
-                f"  {letter}: {sonos_entries.get(code, {}).get('track', '(removed)')}"
+                f"  {letter}: {_sonos_track(new_map, code) or '(removed)'}"
                 for letter, code in LETTER_TO_EVDEV.items()
-                if old_map.get(code, {}).get('track') != sonos_entries.get(code, {}).get('track')
+                if _sonos_track(old_map, code) != _sonos_track(new_map, code)
             ]
             if changed:
                 print(f"Firestore: {len(changed)} key(s) updated:", flush=True)
@@ -127,13 +147,30 @@ def load_keybindings():
 
     print(f"Firestore: loaded {len(sonos_entries)} song keys:", flush=True)
     for letter, code in LETTER_TO_EVDEV.items():
-        entry = sonos_entries.get(code)
-        track = entry['track'] if entry else '(missing)'
-        print(f"  {letter}: {track}", flush=True)
+        print(f"  {letter}: {_sonos_track(sonos_entries, code) or '(missing)'}", flush=True)
 
     config_ref.on_snapshot(_on_config_snapshot)
     print("Firestore: live listener started", flush=True)
     return db  # keep reference alive so the listener isn't GC'd
+
+
+def dispatch(binding, sonos_module, plejd_module, facetime_module):
+    action = binding["action"]
+    if action == "sonos":
+        sonos_module.put(binding["track"])
+    elif action == "sonos_stop":
+        sonos_module.stop_playback()
+    elif action == "story":
+        story = random.choice(stories.STORIES)
+        print(f"Story: {story['title']}", flush=True)
+        sonos_module.put([
+            f"https://open.spotify.com/track/{track_id}"
+            for track_id in story["tracks"]
+        ])
+    elif action == "plejd":
+        plejd_module.put(binding["dim"])
+    elif action == "facetime":
+        facetime_module.put(binding["contact"])
 
 
 def set_leds(keyboard, state):
@@ -193,23 +230,12 @@ def main():
             if event.type != ecodes.EV_KEY or event.value != 1:
                 continue
 
-            binding = KEY_MAP.get(event.code)
-            if not binding:
+            steps = KEY_MAP.get(event.code)
+            if not steps:
                 continue
 
-            if binding["action"] == "sonos":
-                sonos_module.put(binding["track"])
-            elif binding["action"] == "story":
-                story = random.choice(stories.STORIES)
-                print(f"Story: {story['title']}", flush=True)
-                sonos_module.put([
-                    f"https://open.spotify.com/track/{track_id}"
-                    for track_id in story["tracks"]
-                ])
-            elif binding["action"] == "plejd":
-                plejd_module.put(binding["dim"])
-            elif binding["action"] == "facetime":
-                facetime_module.put(binding["contact"])
+            for step in steps:
+                dispatch(step, sonos_module, plejd_module, facetime_module)
 
     finally:
         led_stop.set()
