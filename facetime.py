@@ -12,16 +12,16 @@ CREDENTIALS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fac
 
 
 class FacetimeModule:
-    """Sends a trigger email to the iPad's own iCloud account. Each key has a
-    high-entropy random subject line; a Shortcuts automation on the iPad
-    matches on that subject to start a FaceTime call to the right person."""
+    """Sends a trigger email to the iPad's own iCloud account. Each contact id
+    maps to a high-entropy random subject line; a Shortcuts automation on the
+    iPad matches on that subject to start a FaceTime call to the right person."""
 
     def __init__(self, credentials_file: str = CREDENTIALS_FILE):
         with open(credentials_file) as f:
             creds = json.load(f)
         self._username = creds["username"]
         self._password = creds["password"]
-        self._keys = creds["keys"]
+        self._contacts = creds["contacts"]
         self._queue = queue.SimpleQueue()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self.is_busy = False
@@ -29,8 +29,8 @@ class FacetimeModule:
     def start(self):
         self._thread.start()
 
-    def put(self, key_name: str):
-        self._queue.put(key_name)
+    def put(self, contact_id: str):
+        self._queue.put(contact_id)
 
     def stop(self):
         self._queue.put(None)
@@ -38,22 +38,22 @@ class FacetimeModule:
 
     def _run(self):
         while True:
-            key_name = self._queue.get()
-            if key_name is None:
+            contact_id = self._queue.get()
+            if contact_id is None:
                 return
 
             self.is_busy = True
             try:
-                self._send(key_name)
+                self._send(contact_id)
             except Exception as e:
                 print(f"Facetime error: {e}", flush=True)
             finally:
                 self.is_busy = False
 
-    def _send(self, key_name: str):
-        subject = self._keys.get(key_name)
+    def _send(self, contact_id: str):
+        subject = self._contacts.get(contact_id)
         if not subject:
-            print(f"Facetime: no trigger configured for key '{key_name}'", flush=True)
+            print(f"Facetime: no trigger configured for contact '{contact_id}'", flush=True)
             return
 
         msg = EmailMessage()
@@ -62,9 +62,9 @@ class FacetimeModule:
         msg["To"] = self._username
         msg.set_content("pipal trigger")
 
-        print(f"Facetime: sending trigger for '{key_name}'", flush=True)
+        print(f"Facetime: sending trigger for '{contact_id}'", flush=True)
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as smtp:
             smtp.starttls()
             smtp.login(self._username, self._password)
             smtp.send_message(msg)
-        print(f"Facetime: trigger sent for '{key_name}'", flush=True)
+        print(f"Facetime: trigger sent for '{contact_id}'", flush=True)

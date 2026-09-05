@@ -46,15 +46,15 @@ PLEJD_ENTRIES = {
 }
 PLEJD_ENTRIES[ecodes.KEY_ESC] = {"action": "plejd", "dim": None}
 
-# The 6-key cluster above the arrow keys, one per family member, each calling
-# out to a distinct Shortcuts automation on the iPad via facetime.py.
+# The 6-key cluster above the arrow keys, one per family member. Each contact
+# id is opaque to pipal.py; facetime.py maps it to a Shortcuts trigger.
 FACETIME_ENTRIES = {
-    ecodes.KEY_INSERT: {"action": "facetime", "key": "INSERT"},
-    ecodes.KEY_HOME: {"action": "facetime", "key": "HOME"},
-    ecodes.KEY_PAGEUP: {"action": "facetime", "key": "PAGEUP"},
-    ecodes.KEY_DELETE: {"action": "facetime", "key": "DELETE"},
-    ecodes.KEY_END: {"action": "facetime", "key": "END"},
-    ecodes.KEY_PAGEDOWN: {"action": "facetime", "key": "PAGEDOWN"},
+    ecodes.KEY_INSERT: {"action": "facetime", "contact": "contact_1"},
+    ecodes.KEY_HOME: {"action": "facetime", "contact": "contact_2"},
+    ecodes.KEY_PAGEUP: {"action": "facetime", "contact": "contact_3"},
+    ecodes.KEY_DELETE: {"action": "facetime", "contact": "contact_4"},
+    ecodes.KEY_END: {"action": "facetime", "contact": "contact_5"},
+    ecodes.KEY_PAGEDOWN: {"action": "facetime", "contact": "contact_6"},
 }
 
 # Static bindings that are always present regardless of Firestore config.
@@ -209,7 +209,7 @@ def main():
             elif binding["action"] == "plejd":
                 plejd_module.put(binding["dim"])
             elif binding["action"] == "facetime":
-                facetime_module.put(binding["key"])
+                facetime_module.put(binding["contact"])
 
     finally:
         led_stop.set()
