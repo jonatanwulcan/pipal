@@ -56,6 +56,7 @@ FACETIME_CONTACTS = {
     ecodes.KEY_DELETE: "Mamma",
     ecodes.KEY_END: "Farbror Elle",
     ecodes.KEY_PAGEDOWN: "Faster Judit",
+    ecodes.KEY_NUMLOCK: "Faster Sara",
 }
 
 # Starting a FaceTime call also brings the desk lamp to full and stops any Sonos
